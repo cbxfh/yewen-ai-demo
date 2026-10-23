@@ -138,6 +138,15 @@ test('login page is public and exposes registration and login forms', async () =
   assert.match(html, /知识库按账号隔离/);
 });
 
+test('admin dashboard page is separate and marked noindex', async () => {
+  const response = await fetch(`${baseUrl}/admin`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /实时数据后台/);
+  assert.match(html, /管理员登录/);
+  assert.match(html, /noindex, nofollow/);
+});
+
 test('authenticated session returns only the current account profile', async () => {
   const response = await authenticatedFetch('/api/auth/session');
   assert.equal(response.status, 200);
@@ -373,6 +382,35 @@ test('API settings refuse non-local host headers', async () => {
   assert.equal(result.body.code, 'LOCAL_CONFIG_ONLY');
 });
 
+test('admin setup is disabled for non-local host headers', async () => {
+  const port = server.address().port;
+  const result = await new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        hostname: '127.0.0.1',
+        port,
+        path: '/api/admin/status',
+        headers: { Host: 'public.example.test' }
+      },
+      (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => {
+          resolve({
+            status: response.statusCode,
+            body: JSON.parse(Buffer.concat(chunks).toString('utf8'))
+          });
+        });
+      }
+    );
+    request.on('error', reject);
+    request.end();
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.adminConfigured, false);
+  assert.equal(result.body.setupAllowed, false);
+});
+
 test('chat endpoint proxies a configured OpenAI-compatible provider request', async () => {
   let received;
   const mockProvider = http.createServer((req, res) => {
@@ -460,6 +498,72 @@ test('chat endpoint proxies a configured OpenAI-compatible provider request', as
       mockProvider.close((error) => (error ? reject(error) : resolve()));
     });
   }
+});
+
+test('admin setup and dashboard statistics require the separate admin session', async () => {
+  const normalUserStats = await authenticatedFetch('/api/admin/stats');
+  assert.equal(normalUserStats.status, 401);
+  assert.equal((await normalUserStats.json()).code, 'ADMIN_AUTH_REQUIRED');
+
+  const setup = await fetch(`${baseUrl}/api/admin/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'admin_owner',
+      password: 'admin-password-123'
+    })
+  });
+  assert.equal(setup.status, 201);
+  const adminCookie = getSessionCookie(setup);
+  const setupPayload = await setup.json();
+  assert.equal(setupPayload.authenticated, true);
+  assert.equal(setupPayload.admin.username, 'admin_owner');
+
+  const duplicateSetup = await fetch(`${baseUrl}/api/admin/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'another_admin',
+      password: 'another-password-123'
+    })
+  });
+  assert.equal(duplicateSetup.status, 409);
+
+  const statsResponse = await authenticatedFetch('/api/admin/stats', {}, adminCookie);
+  assert.equal(statsResponse.status, 200);
+  const stats = await statsResponse.json();
+  assert.equal(stats.admin.username, 'admin_owner');
+  assert.ok(stats.totalUsers >= 4);
+  assert.ok(Array.isArray(stats.users));
+  assert.ok(stats.users.every((user) => !Object.hasOwn(user, 'passwordHash')));
+  assert.ok(stats.users.every((user) => !Object.hasOwn(user, 'salt')));
+  assert.ok(stats.totalDocuments >= 2);
+  assert.ok(stats.totalMessages >= 2);
+
+  const logout = await authenticatedFetch(
+    '/api/admin/logout',
+    { method: 'POST', headers: { Accept: 'application/json' } },
+    adminCookie
+  );
+  assert.equal(logout.status, 200);
+  const expiredStats = await authenticatedFetch('/api/admin/stats', {}, adminCookie);
+  assert.equal(expiredStats.status, 401);
+
+  const login = await fetch(`${baseUrl}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'admin_owner',
+      password: 'admin-password-123'
+    })
+  });
+  assert.equal(login.status, 200);
+  const newAdminCookie = getSessionCookie(login);
+  const status = await authenticatedFetch('/api/admin/status', {}, newAdminCookie);
+  const statusPayload = await status.json();
+  assert.equal(statusPayload.authenticated, true);
+  assert.equal(statusPayload.adminConfigured, true);
+  assert.equal(statusPayload.setupAllowed, false);
 });
 
 test('AI resource context stays within the configured limit', () => {

@@ -22,6 +22,10 @@ services:
         value: "300"
       - key: APP_DATA_DIR
         value: /app/.data
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
     disk:
       name: industry-ai-user-data
       mountPath: /app/.data

@@ -19,7 +19,9 @@ const MAX_KNOWLEDGE_DOCS = 6;
 const MAX_KNOWLEDGE_DOC_CHARS = 12000;
 const MAX_KNOWLEDGE_CHARS = 24000;
 const SESSION_COOKIE = 'industry_ai_session';
+const ADMIN_SESSION_COOKIE = 'industry_ai_admin_session';
 const SESSION_COOKIE_MS = 30 * 24 * 60 * 60 * 1000;
+const ADMIN_SESSION_COOKIE_MS = 12 * 60 * 60 * 1000;
 const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const AUTH_RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 1000;
@@ -50,6 +52,18 @@ function getUserStore() {
     userStore = createUserStore(process.env.APP_DATA_DIR || path.join(ROOT, '.data'));
   }
   return userStore;
+}
+
+function bootstrapAdminFromEnvironment() {
+  const username = String(process.env.ADMIN_USERNAME || '').trim();
+  const password = String(process.env.ADMIN_PASSWORD || '');
+  if (!username || !password || getUserStore().hasAdmin()) return;
+  try {
+    getUserStore().setupAdmin(username, password);
+    console.log('管理员账号已从环境变量初始化');
+  } catch (error) {
+    console.warn(`[warn] 管理员环境变量初始化失败：${error.message}`);
+  }
 }
 
 function loadLocalEnv() {
@@ -140,6 +154,10 @@ function getSessionToken(req) {
   return parseCookies(req)[SESSION_COOKIE] || '';
 }
 
+function getAdminSessionToken(req) {
+  return parseCookies(req)[ADMIN_SESSION_COOKIE] || '';
+}
+
 function isSecureRequest(req) {
   return Boolean(
     req.socket.encrypted ||
@@ -174,6 +192,30 @@ function clearSessionCookie(req) {
   return parts.join('; ');
 }
 
+function createAdminSessionCookie(req, token) {
+  const parts = [
+    `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${Math.floor(ADMIN_SESSION_COOKIE_MS / 1000)}`
+  ];
+  if (isSecureRequest(req)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function clearAdminSessionCookie(req) {
+  const parts = [
+    `${ADMIN_SESSION_COOKIE}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    'Max-Age=0'
+  ];
+  if (isSecureRequest(req)) parts.push('Secure');
+  return parts.join('; ');
+}
+
 function getAuthenticatedUser(req) {
   return getUserStore().getSessionUser(getSessionToken(req));
 }
@@ -188,6 +230,22 @@ function requireAuthenticatedUser(req, res) {
     return null;
   }
   return user;
+}
+
+function getAuthenticatedAdmin(req) {
+  return getUserStore().getAdminSession(getAdminSessionToken(req));
+}
+
+function requireAuthenticatedAdmin(req, res) {
+  const admin = getAuthenticatedAdmin(req);
+  if (!admin) {
+    json(res, 401, {
+      error: '需要管理员登录。',
+      code: 'ADMIN_AUTH_REQUIRED'
+    });
+    return null;
+  }
+  return admin;
 }
 
 function checkAuthRateLimit(ip) {
@@ -739,6 +797,87 @@ function handleSession(req, res) {
   json(res, 200, { authenticated: Boolean(user), user: user || null });
 }
 
+function handleAdminStatus(req, res) {
+  const adminConfigured = getUserStore().hasAdmin();
+  const admin = getAuthenticatedAdmin(req);
+  json(res, 200, {
+    adminConfigured,
+    authenticated: Boolean(admin),
+    admin: admin || null,
+    setupAllowed: !adminConfigured && isLocalRequest(req)
+  });
+}
+
+async function handleAdminSetup(req, res) {
+  if (!isLocalRequest(req)) {
+    json(res, 403, {
+      error: '管理员首次设置只能在运行网站的电脑本机完成。',
+      code: 'ADMIN_SETUP_LOCAL_ONLY'
+    });
+    return;
+  }
+  if (!checkAuthRateLimit(getClientIp(req))) {
+    json(res, 429, { error: '操作过于频繁，请稍后再试。', code: 'AUTH_RATE_LIMITED' });
+    return;
+  }
+  try {
+    const body = await readJsonBody(req);
+    const admin = getUserStore().setupAdmin(body.username, body.password);
+    const session = getUserStore().createAdminSession(admin.username);
+    json(
+      res,
+      201,
+      { authenticated: true, admin },
+      { 'Set-Cookie': createAdminSessionCookie(req, session.token) }
+    );
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+async function handleAdminLogin(req, res) {
+  if (!checkAuthRateLimit(getClientIp(req))) {
+    json(res, 429, { error: '登录尝试过于频繁，请稍后再试。', code: 'AUTH_RATE_LIMITED' });
+    return;
+  }
+  try {
+    const body = await readJsonBody(req);
+    const admin = getUserStore().authenticateAdmin(body.username, body.password);
+    const session = getUserStore().createAdminSession(admin.username);
+    json(
+      res,
+      200,
+      { authenticated: true, admin },
+      { 'Set-Cookie': createAdminSessionCookie(req, session.token) }
+    );
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleAdminLogout(req, res) {
+  getUserStore().revokeAdminSession(getAdminSessionToken(req));
+  json(
+    res,
+    200,
+    { authenticated: false },
+    { 'Set-Cookie': clearAdminSessionCookie(req) }
+  );
+}
+
+function handleAdminStats(req, res) {
+  const admin = requireAuthenticatedAdmin(req, res);
+  if (!admin) return;
+  try {
+    json(res, 200, {
+      admin,
+      ...getUserStore().getDashboardStats()
+    });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
 function handleKnowledgeList(req, res) {
   const user = requireAuthenticatedUser(req, res);
   if (!user) return;
@@ -905,7 +1044,8 @@ function serveStatic(req, res, pathname) {
   const aliases = {
     '/': 'index.html',
     '/assistant': 'assistant.html',
-    '/login': 'login.html'
+    '/login': 'login.html',
+    '/admin': 'admin.html'
   };
   let relative = aliases[pathname] || decodeURIComponent(pathname).replace(/^\/+/, '');
   if (relative.includes('\0')) return sendNotFound(res);
@@ -936,6 +1076,7 @@ function sendNotFound(res) {
 function createApp() {
   loadLocalEnv();
   getUserStore();
+  bootstrapAdminFromEnvironment();
   return http.createServer(async (req, res) => {
     const requestUrl = new URL(req.url, 'http://localhost');
     const pathname = requestUrl.pathname;
@@ -963,6 +1104,31 @@ function createApp() {
 
       if (pathname === '/api/auth/session' && req.method === 'GET') {
         handleSession(req, res);
+        return;
+      }
+
+      if (pathname === '/api/admin/status' && req.method === 'GET') {
+        handleAdminStatus(req, res);
+        return;
+      }
+
+      if (pathname === '/api/admin/setup' && req.method === 'POST') {
+        await handleAdminSetup(req, res);
+        return;
+      }
+
+      if (pathname === '/api/admin/login' && req.method === 'POST') {
+        await handleAdminLogin(req, res);
+        return;
+      }
+
+      if (pathname === '/api/admin/logout' && req.method === 'POST') {
+        handleAdminLogout(req, res);
+        return;
+      }
+
+      if (pathname === '/api/admin/stats' && req.method === 'GET') {
+        handleAdminStats(req, res);
         return;
       }
 

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#15251c">
+    <title>实时后台｜行业 AI 工具包</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/admin.css">
+  </head>
+  <body>
+    <svg class="svg-sprite" aria-hidden="true">
+      <symbol id="icon-shield" viewBox="0 0 24 24">
+        <path d="M12 3 5 6v5c0 4.5 2.8 8.1 7 10 4.2-1.9 7-5.5 7-10V6l-7-3Z"></path>
+        <path d="m9 12 2 2 4-4"></path>
+      </symbol>
+      <symbol id="icon-users" viewBox="0 0 24 24">
+        <circle cx="9" cy="8" r="3"></circle>
+        <path d="M3 20a6 6 0 0 1 12 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 4 4.9"></path>
+      </symbol>
+      <symbol id="icon-doc" viewBox="0 0 24 24">
+        <path d="M6 3h8l4 4v14H6V3Z"></path>
+        <path d="M14 3v5h5M9 12h6M9 16h6"></path>
+      </symbol>
+      <symbol id="icon-message" viewBox="0 0 24 24">
+        <path d="M20 15a3 3 0 0 1-3 3H9l-5 3v-6a3 3 0 0 1-1-2.2V7a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v8Z"></path>
+      </symbol>
+      <symbol id="icon-session" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="8"></circle>
+        <path d="M12 8v5l3 2"></path>
+      </symbol>
+      <symbol id="icon-spark" viewBox="0 0 24 24">
+        <path d="m12 3-1.6 5.4L5 10l5.4 1.6L12 17l1.6-5.4L19 10l-5.4-1.6L12 3Z"></path>
+      </symbol>
+      <symbol id="icon-logout" viewBox="0 0 24 24">
+        <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M14 8l4 4-4 4M9 12h9"></path>
+      </symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24">
+        <path d="M20 8v5h-5M4 16v-5h5"></path>
+        <path d="M6.1 8A7.5 7.5 0 0 1 19 10M17.9 16A7.5 7.5 0 0 1 5 14"></path>
+      </symbol>
+      <symbol id="icon-eye" viewBox="0 0 24 24">
+        <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"></path>
+        <circle cx="12" cy="12" r="2.5"></circle>
+      </symbol>
+      <symbol id="icon-arrow-left" viewBox="0 0 24 24">
+        <path d="M19 12H5M10 7l-5 5 5 5"></path>
+      </symbol>
+    </svg>
+
+    <div class="admin-loading" id="admin-loading">
+      <span><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg></span>
+      <strong>正在验证管理员权限</strong>
+    </div>
+
+    <main class="admin-gate" id="admin-gate" hidden>
+      <a class="gate-brand" href="/">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </span>
+        <span>
+          <strong>行业 AI 工具包</strong>
+          <small>PRIVATE OPERATIONS</small>
+        </span>
+      </a>
+
+      <section class="gate-card">
+        <span class="gate-icon">
+          <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+        </span>
+        <span class="gate-kicker" id="gate-kicker">ADMIN ACCESS</span>
+        <h1 id="gate-title">管理员登录</h1>
+        <p id="gate-copy">输入独立管理员账号后查看实时运营数据。</p>
+
+        <form class="gate-form" id="admin-login-form">
+          <label>
+            <span>管理员用户名</span>
+            <input id="admin-username" type="text" autocomplete="username" required>
+          </label>
+          <label>
+            <span>管理员密码</span>
+            <div class="password-field">
+              <input id="admin-password" type="password" autocomplete="current-password" required>
+              <button id="toggle-admin-password" type="button" aria-label="显示密码">
+                <svg class="icon" aria-hidden="true"><use href="#icon-eye"></use></svg>
+              </button>
+            </div>
+          </label>
+          <label id="admin-confirm-field" hidden>
+            <span>确认管理员密码</span>
+            <input id="admin-confirm-password" type="password" minlength="12" autocomplete="new-password">
+          </label>
+          <p class="gate-error" id="admin-error" role="alert" hidden></p>
+          <p class="gate-note" id="admin-gate-note">
+            管理员账号与普通用户账号完全独立，普通用户无法进入此后台。
+          </p>
+          <button class="gate-submit" id="admin-submit" type="submit">登录后台</button>
+        </form>
+
+        <a class="gate-back" href="/">
+          <svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
+          返回公开网站
+        </a>
+      </section>
+    </main>
+
+    <div class="admin-app" id="admin-app" hidden>
+      <header class="admin-header">
+        <a class="admin-brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+          </span>
+          <span>
+            <strong>行业 AI 工具包</strong>
+            <small>LIVE OPERATIONS</small>
+          </span>
+        </a>
+        <div class="admin-header-actions">
+          <span class="live-badge"><i></i> 实时更新</span>
+          <span class="admin-name" id="admin-name">ADMIN</span>
+          <button class="refresh-button" id="refresh-stats" type="button" aria-label="立即刷新">
+            <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+          </button>
+          <button class="logout-button" id="admin-logout" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#icon-logout"></use></svg>
+            <span>退出</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="dashboard-title">
+          <div>
+            <span class="dashboard-kicker">OPERATIONS OVERVIEW</span>
+            <h1>实时数据后台</h1>
+            <p>只展示账号级汇总数据，不展示密码、个人资料正文或对话内容。</p>
+          </div>
+          <div class="last-updated">
+            <span>最后更新</span>
+            <strong id="last-updated">等待数据</strong>
+            <small>每 5 秒自动刷新</small>
+          </div>
+        </section>
+
+        <section class="stat-grid" aria-label="核心运营数据">
+          <article class="stat-card stat-primary">
+            <div class="stat-head">
+              <span>注册用户总数</span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-users"></use></svg>
+            </div>
+            <strong id="total-users">0</strong>
+            <p>累计创建的独立账号</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-head">
+              <span>今日新增</span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-users"></use></svg>
+            </div>
+            <strong id="new-users-today">0</strong>
+            <p>今天注册的新账号</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-head">
+              <span>有效登录会话</span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-session"></use></svg>
+            </div>
+            <strong id="active-sessions">0</strong>
+            <p>尚未过期的账号会话</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-head">
+              <span>个人资料</span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-doc"></use></svg>
+            </div>
+            <strong id="total-documents">0</strong>
+            <p>所有账号保存的资料数</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-head">
+              <span>对话消息</span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-message"></use></svg>
+            </div>
+            <strong id="total-messages">0</strong>
+            <p>当前保存的对话消息数</p>
+          </article>
+          <article class="stat-card">
+            <div class="stat-head">
+              <span>今日 AI 调用</span>
+              <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+            </div>
+            <strong id="ai-requests-today">0</strong>
+            <p>所有账号今日成功计入额度</p>
+          </article>
+        </section>
+
+        <section class="dashboard-grid">
+          <article class="trend-panel">
+            <header class="panel-heading">
+              <div>
+                <span>REGISTRATION TREND</span>
+                <h2>近 7 天注册趋势</h2>
+              </div>
+              <strong id="trend-total">0</strong>
+            </header>
+            <div class="trend-chart" id="trend-chart" aria-label="近七天注册走势"></div>
+          </article>
+          <article class="privacy-panel">
+            <span class="privacy-icon">
+              <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+            </span>
+            <span class="dashboard-kicker">DATA BOUNDARY</span>
+            <h2>只看经营数据</h2>
+            <p>
+              后台不会展示用户的密码、API 密钥、知识库正文或 AI 对话内容。
+              账号之间仍然保持数据隔离。
+            </p>
+            <div class="privacy-meta">
+              <span>管理员会话</span>
+              <strong>12 小时自动失效</strong>
+            </div>
+          </article>
+        </section>
+
+        <section class="user-panel">
+          <header class="panel-heading">
+            <div>
+              <span>ACCOUNT DIRECTORY</span>
+              <h2>账号概览</h2>
+            </div>
+            <div class="user-table-tools">
+              <label>
+                <span class="sr-only">搜索用户名</span>
+                <input id="user-search" type="search" placeholder="搜索用户名">
+              </label>
+              <span id="visible-users">显示 0 个</span>
+            </div>
+          </header>
+          <div class="user-table-wrap">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th>用户名</th>
+                  <th>注册时间</th>
+                  <th>个人资料</th>
+                  <th>对话消息</th>
+                  <th>今日调用</th>
+                  <th>最近活动</th>
+                </tr>
+              </thead>
+              <tbody id="user-table-body"></tbody>
+            </table>
+            <div class="table-empty" id="table-empty" hidden>暂无注册账号</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script src="/admin.js" defer></script>
+  </body>
+</html>
