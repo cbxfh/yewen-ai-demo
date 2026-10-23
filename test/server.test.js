@@ -12,24 +12,59 @@ const { resources, buildResourceContext } = require('../data/resources');
 let server;
 let baseUrl;
 let testConfigPath;
+let testDataDir;
+let testSessionCookie;
 
 before(async () => {
   process.env.AI_API_KEY = '';
   testConfigPath = path.join(os.tmpdir(), `industry-ai-toolkit-test-${process.pid}.json`);
   process.env.AI_CONFIG_PATH = testConfigPath;
+  testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'industry-ai-toolkit-data-'));
+  process.env.APP_DATA_DIR = testDataDir;
   server = createApp();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   baseUrl = `http://127.0.0.1:${address.port}`;
+  const registration = await registerUser('main_tester', 'password-123');
+  testSessionCookie = registration.cookie;
 });
 
 after(async () => {
   if (testConfigPath && fs.existsSync(testConfigPath)) fs.unlinkSync(testConfigPath);
+  if (testDataDir && fs.existsSync(testDataDir)) fs.rmSync(testDataDir, { recursive: true, force: true });
   if (!server) return;
   await new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
 });
+
+function getSessionCookie(response) {
+  const cookies =
+    typeof response.headers.getSetCookie === 'function'
+      ? response.headers.getSetCookie()
+      : [response.headers.get('set-cookie')].filter(Boolean);
+  assert.ok(cookies.length, 'expected a session cookie');
+  return cookies[0].split(';')[0];
+}
+
+async function registerUser(username, password = 'password-123') {
+  const response = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  assert.equal(response.status, 201);
+  return {
+    cookie: getSessionCookie(response),
+    payload: await response.json()
+  };
+}
+
+function authenticatedFetch(path, options = {}, cookie = testSessionCookie) {
+  const headers = new Headers(options.headers || {});
+  headers.set('Cookie', cookie);
+  return fetch(`${baseUrl}${path}`, { ...options, headers });
+}
 
 test('health endpoint reports the service as ready', async () => {
   const response = await fetch(`${baseUrl}/api/health`);
@@ -93,6 +128,59 @@ test('dedicated assistant page exposes API settings and personal knowledge impor
   assert.match(html, /name="viewport"/);
 });
 
+test('login page is public and exposes registration and login forms', async () => {
+  const response = await fetch(`${baseUrl}/login`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /注册新账号/);
+  assert.match(html, /用户名/);
+  assert.match(html, /密码/);
+  assert.match(html, /知识库按账号隔离/);
+});
+
+test('authenticated session returns only the current account profile', async () => {
+  const response = await authenticatedFetch('/api/auth/session');
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.authenticated, true);
+  assert.equal(payload.user.username, 'main_tester');
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.user, 'passwordHash'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.user, 'salt'), false);
+});
+
+test('register, logout, and login create independent valid sessions', async () => {
+  const registered = await registerUser('login_cycle_user');
+  const logout = await authenticatedFetch(
+    '/api/auth/logout',
+    { method: 'POST', headers: { Accept: 'application/json' } },
+    registered.cookie
+  );
+  assert.equal(logout.status, 200);
+
+  const expiredSession = await authenticatedFetch('/api/auth/session', {}, registered.cookie);
+  assert.equal((await expiredSession.json()).authenticated, false);
+
+  const badLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'login_cycle_user', password: 'wrong-password' })
+  });
+  assert.equal(badLogin.status, 401);
+  assert.equal((await badLogin.json()).code, 'INVALID_CREDENTIALS');
+
+  const login = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'login_cycle_user', password: 'password-123' })
+  });
+  assert.equal(login.status, 200);
+  const loginCookie = getSessionCookie(login);
+  const activeSession = await authenticatedFetch('/api/auth/session', {}, loginCookie);
+  const activePayload = await activeSession.json();
+  assert.equal(activePayload.authenticated, true);
+  assert.equal(activePayload.user.username, 'login_cycle_user');
+});
+
 test('mobile web manifest is served with the correct content type', async () => {
   const response = await fetch(`${baseUrl}/manifest.webmanifest`);
   assert.equal(response.status, 200);
@@ -107,8 +195,82 @@ test('static server does not expose files outside public directory', async () =>
   assert.equal(response.status, 404);
 });
 
+test('knowledge documents are isolated between user accounts', async () => {
+  const userA = await registerUser('isolation_user_a');
+  const userB = await registerUser('isolation_user_b');
+
+  const createResponse = await authenticatedFetch(
+    '/api/knowledge',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'A账号私有资料.txt',
+        type: 'txt',
+        content: '只允许 isolation_user_a 读取的门店资料。'
+      })
+    },
+    userA.cookie
+  );
+  assert.equal(createResponse.status, 201);
+  const created = await createResponse.json();
+
+  const listA = await authenticatedFetch('/api/knowledge', {}, userA.cookie);
+  assert.equal(listA.status, 200);
+  const listAPayload = await listA.json();
+  assert.equal(listAPayload.documents.length, 1);
+  assert.equal(listAPayload.documents[0].name, 'A账号私有资料.txt');
+
+  const listB = await authenticatedFetch('/api/knowledge', {}, userB.cookie);
+  assert.equal(listB.status, 200);
+  const listBPayload = await listB.json();
+  assert.equal(listBPayload.documents.length, 0);
+
+  const readAsB = await authenticatedFetch(
+    `/api/knowledge/${encodeURIComponent(created.document.id)}`,
+    {},
+    userB.cookie
+  );
+  assert.equal(readAsB.status, 404);
+  assert.equal((await readAsB.json()).code, 'DOCUMENT_NOT_FOUND');
+
+  const useAsB = await authenticatedFetch(
+    '/api/chat',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: '尝试使用其他账号的资料',
+        industry: 'food',
+        knowledgeIds: [created.document.id]
+      })
+    },
+    userB.cookie
+  );
+  assert.equal(useAsB.status, 404);
+  assert.equal((await useAsB.json()).code, 'KNOWLEDGE_NOT_FOUND');
+
+  const historyB = await authenticatedFetch('/api/chat/history', {}, userB.cookie);
+  assert.equal(historyB.status, 200);
+  assert.equal((await historyB.json()).messages.length, 0);
+});
+
+test('unauthenticated visitors cannot access private user endpoints', async () => {
+  const knowledge = await fetch(`${baseUrl}/api/knowledge`);
+  assert.equal(knowledge.status, 401);
+  assert.equal((await knowledge.json()).code, 'AUTH_REQUIRED');
+
+  const chat = await fetch(`${baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: '测试' })
+  });
+  assert.equal(chat.status, 401);
+  assert.equal((await chat.json()).code, 'AUTH_REQUIRED');
+});
+
 test('chat endpoint rejects malformed messages before calling a provider', async () => {
-  const response = await fetch(`${baseUrl}/api/chat`, {
+  const response = await authenticatedFetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages: [], industry: 'food' })
@@ -120,11 +282,11 @@ test('chat endpoint rejects malformed messages before calling a provider', async
 
 test('chat endpoint explains that AI is not configured when no key is present', async () => {
   process.env.AI_API_KEY = '';
-  const response = await fetch(`${baseUrl}/api/chat`, {
+  const response = await authenticatedFetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messages: [{ role: 'user', content: '请帮我设计一份日检表。' }],
+      message: '请帮我设计一份日检表。',
       industry: 'food'
     })
   });
@@ -243,18 +405,25 @@ test('chat endpoint proxies a configured OpenAI-compatible provider request', as
     process.env.AI_API_KEY = 'server-side-test-key';
     process.env.AI_BASE_URL = `http://127.0.0.1:${mockPort}/v1`;
     process.env.AI_MODEL = 'mock-model';
-    const response = await fetch(`${baseUrl}/api/chat`, {
+    const uploadResponse = await authenticatedFetch('/api/knowledge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{ role: 'user', content: '请给我三个日检重点。' }],
+        name: '门店周会纪要.txt',
+        type: 'txt',
+        content: '本周发现晚高峰冷柜温度记录存在两次缺漏，由值班经理负责补齐复核。'
+      })
+    });
+    assert.equal(uploadResponse.status, 201);
+    const uploaded = await uploadResponse.json();
+
+    const response = await authenticatedFetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: '请给我三个日检重点。',
         industry: 'food',
-        knowledge: [
-          {
-            name: '门店周会纪要.txt',
-            content: '本周发现晚高峰冷柜温度记录存在两次缺漏，由值班经理负责补齐复核。'
-          }
-        ]
+        knowledgeIds: [uploaded.document.id]
       })
     });
     assert.equal(response.status, 200);
@@ -276,6 +445,13 @@ test('chat endpoint proxies a configured OpenAI-compatible provider request', as
     const testPayload = await testResponse.json();
     assert.equal(testPayload.connected, true);
     assert.equal(testPayload.reply, '这是来自模拟供应商的测试回答。');
+
+    const historyResponse = await authenticatedFetch('/api/chat/history');
+    assert.equal(historyResponse.status, 200);
+    const history = await historyResponse.json();
+    assert.equal(history.messages.length, 2);
+    assert.equal(history.messages[0].content, '请给我三个日检重点。');
+    assert.equal(history.messages[1].role, 'assistant');
   } finally {
     process.env.AI_API_KEY = previous.key ?? '';
     process.env.AI_BASE_URL = previous.base ?? '';

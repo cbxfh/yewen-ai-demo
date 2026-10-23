@@ -1,5 +1,6 @@
 .git
 .runtime
+.data
 .env
 work
 test

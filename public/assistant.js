@@ -7,28 +7,29 @@
   const MAX_SELECTED_DOCS = 6;
   const MAX_DOCUMENT_CONTEXT_CHARS = 12000;
   const MAX_TOTAL_CONTEXT_CHARS = 24000;
-  const MAX_CHAT_HISTORY = 10;
-  const DB_NAME = 'industry-ai-knowledge';
-  const DB_STORE = 'documents';
-  const SELECTED_STORAGE_KEY = 'industry-ai-selected-documents';
+  const SELECTED_STORAGE_PREFIX = 'industry-ai-selected-documents';
   const ACCEPTED_EXTENSIONS = new Set(['txt', 'md', 'markdown', 'csv', 'json', 'html', 'htm']);
 
   const state = {
+    user: null,
     api: null,
     localConfigAllowed: false,
     documents: [],
-    selectedIds: readSelectedIds(),
+    selectedIds: new Set(),
     knowledgeQuery: '',
     chatMessages: [],
     chatLoading: false,
     chatIndustry: 'all',
     activeModal: null,
     modalReturnFocus: null,
-    toastTimer: null,
-    dbPromise: null
+    toastTimer: null
   };
 
   const elements = {
+    authLoading: document.getElementById('auth-loading'),
+    currentUsername: document.getElementById('current-username'),
+    userAvatar: document.getElementById('user-avatar'),
+    logoutUser: document.getElementById('logout-user'),
     headerApiDot: document.getElementById('header-api-dot'),
     chatApiDot: document.getElementById('chat-api-dot'),
     chatApiStatus: document.getElementById('chat-api-status'),
@@ -94,15 +95,20 @@
 
   async function init() {
     bindEvents();
-    await Promise.allSettled([loadApiStatus(), loadDocuments()]);
+    const authenticated = await loadAuthSession();
+    if (!authenticated) return;
+    state.selectedIds = readSelectedIds(state.user.id);
+    await Promise.allSettled([loadApiStatus(), loadDocuments(), loadChatHistory()]);
     renderKnowledge();
     updateContextSummary();
     renderChatState();
+    elements.authLoading.hidden = true;
 
     if (shouldOpenSettings()) openSettings();
   }
 
   function bindEvents() {
+    elements.logoutUser.addEventListener('click', logout);
     elements.openApiSettings.addEventListener('click', openSettings);
     elements.welcomeApiConfig.addEventListener('click', openSettings);
     elements.noticeApiConfig.addEventListener('click', openSettings);
@@ -169,6 +175,45 @@
     elements.clearChat.addEventListener('click', clearChat);
 
     document.addEventListener('keydown', handleGlobalKeydown);
+  }
+
+  async function loadAuthSession() {
+    try {
+      const response = await fetch('/api/auth/session', {
+        headers: { Accept: 'application/json' }
+      });
+      if (!response.ok) throw new Error('无法读取登录状态');
+      const payload = await response.json();
+      if (!payload.authenticated || !payload.user) {
+        redirectToLogin();
+        return false;
+      }
+      state.user = payload.user;
+      elements.currentUsername.textContent = payload.user.username;
+      elements.userAvatar.textContent = payload.user.username.slice(0, 1).toUpperCase();
+      return true;
+    } catch {
+      elements.authLoading.querySelector('strong').textContent = '账号验证失败';
+      elements.authLoading.querySelector('p').textContent = '请刷新页面；如果问题持续，请检查服务是否运行。';
+      return false;
+    }
+  }
+
+  function redirectToLogin() {
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.replace(`/login.html?next=${encodeURIComponent(next)}`);
+  }
+
+  async function logout() {
+    elements.logoutUser.disabled = true;
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Accept: 'application/json' }
+      });
+    } finally {
+      window.location.replace('/login.html');
+    }
   }
 
   function shouldOpenSettings() {
@@ -423,8 +468,8 @@
     const errors = [];
     for (const file of files) {
       try {
-        const document = await parseFile(file);
-        await saveDocument(document);
+        const documentInput = await parseFile(file);
+        const document = await uploadDocument(documentInput);
         state.documents.push(document);
         if (state.selectedIds.size < MAX_SELECTED_DOCS) state.selectedIds.add(document.id);
         imported += 1;
@@ -471,12 +516,12 @@
     if (content.length > MAX_DOCUMENT_CHARS) {
       throw new Error(`文本超过 ${MAX_DOCUMENT_CHARS.toLocaleString()} 字`);
     }
-    return createDocument({
+    return {
       name: file.name,
       type: extension === 'htm' ? 'html' : extension,
       content,
       size: file.size
-    });
+    };
   }
 
   function extractHTMLText(html) {
@@ -493,18 +538,6 @@
       .trim();
   }
 
-  function createDocument({ name, type, content, size }) {
-    return {
-      id: createId(),
-      name,
-      type: type || 'text',
-      content,
-      size: Number(size) || new Blob([content]).size,
-      charCount: content.length,
-      createdAt: new Date().toISOString()
-    };
-  }
-
   async function savePastedDocument(event) {
     event.preventDefault();
     const name = elements.pasteTitle.value.trim();
@@ -518,8 +551,7 @@
       return;
     }
     try {
-      const document = createDocument({ name, type: 'pasted', content });
-      await saveDocument(document);
+      const document = await uploadDocument({ name, type: 'pasted', content });
       state.documents.push(document);
       if (state.selectedIds.size < MAX_SELECTED_DOCS) state.selectedIds.add(document.id);
       persistSelectedIds();
@@ -529,9 +561,27 @@
       elements.pasteForm.reset();
       closeModal(elements.pasteModal);
       showToast('资料已保存到个人知识库');
-    } catch {
-      showToast('保存资料失败，请检查浏览器存储空间');
+    } catch (error) {
+      showToast(error.message || '保存资料失败');
     }
+  }
+
+  async function uploadDocument(documentInput) {
+    const response = await fetch('/api/knowledge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(documentInput)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      redirectToLogin();
+      throw new Error('登录已过期，请重新登录');
+    }
+    if (!response.ok) throw new Error(payload.error || '保存资料失败');
+    return payload.document;
   }
 
   function sortDocuments(a, b) {
@@ -671,49 +721,82 @@
     elements.selectAllKnowledge.textContent = allSelected ? '取消全选' : '全选';
   }
 
-  function openPreview(documentId) {
-    const document = state.documents.find((item) => item.id === documentId);
-    if (!document) return;
-    elements.previewTitle.textContent = document.name;
-    elements.previewMeta.textContent = `${document.type.toUpperCase()} · ${document.charCount.toLocaleString()} 字 · 导入于 ${formatDate(document.createdAt)}`;
-    const maxPreview = 30000;
-    elements.previewContent.textContent =
-      document.content.length > maxPreview
-        ? `${document.content.slice(0, maxPreview)}\n\n… 预览已截取，完整内容仍保存在本地知识库中。`
-        : document.content;
+  async function openPreview(documentId) {
+    const metadata = state.documents.find((item) => item.id === documentId);
+    if (!metadata) return;
+    elements.previewTitle.textContent = metadata.name;
+    elements.previewMeta.textContent = `${metadata.type.toUpperCase()} · ${metadata.charCount.toLocaleString()} 字 · 导入于 ${formatDate(metadata.createdAt)}`;
+    elements.previewContent.textContent = '正在读取账号资料…';
     openModal(elements.previewModal, elements.previewDialog);
+    try {
+      const response = await fetch(`/api/knowledge/${encodeURIComponent(documentId)}`, {
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error || '资料读取失败');
+      const document = payload.document;
+      const maxPreview = 30000;
+      elements.previewContent.textContent =
+        document.content.length > maxPreview
+          ? `${document.content.slice(0, maxPreview)}\n\n… 预览已截取，完整内容仍保存在你的账号空间。`
+          : document.content;
+    } catch (error) {
+      elements.previewContent.textContent = error.message || '资料读取失败';
+    }
   }
 
   async function deleteDocument(documentId) {
     const document = state.documents.find((item) => item.id === documentId);
     if (!document) return;
-    if (!window.confirm(`确定删除《${document.name}》吗？此操作只影响当前浏览器。`)) return;
+    if (!window.confirm(`确定从你的账号中删除《${document.name}》吗？`)) return;
     try {
-      await deleteDocumentFromDb(documentId);
+      const response = await fetch(`/api/knowledge/${encodeURIComponent(documentId)}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error || '删除资料失败');
       state.documents = state.documents.filter((item) => item.id !== documentId);
       state.selectedIds.delete(documentId);
       persistSelectedIds();
       renderKnowledge();
       updateContextSummary();
       showToast('资料已删除');
-    } catch {
-      showToast('删除资料失败');
+    } catch (error) {
+      showToast(error.message || '删除资料失败');
     }
   }
 
   async function clearAllDocuments() {
     if (!state.documents.length) return;
-    if (!window.confirm('确定清空当前浏览器中的全部个人资料吗？此操作无法撤销。')) return;
+    if (!window.confirm('确定清空当前账号中的全部个人资料吗？此操作无法撤销。')) return;
     try {
-      await clearDocumentsFromDb();
+      const response = await fetch('/api/knowledge', {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error || '清空知识库失败');
       state.documents = [];
       state.selectedIds.clear();
       persistSelectedIds();
       renderKnowledge();
       updateContextSummary();
       showToast('个人知识库已清空');
-    } catch {
-      showToast('清空知识库失败');
+    } catch (error) {
+      showToast(error.message || '清空知识库失败');
     }
   }
 
@@ -729,16 +812,15 @@
         truncated = true;
         break;
       }
-      const allowance = Math.min(MAX_DOCUMENT_CONTEXT_CHARS, remaining, document.content.length);
-      const content = document.content.slice(0, allowance).trim();
-      if (!content) continue;
-      documents.push({ name: document.name, content });
-      totalChars += content.length;
-      remaining -= content.length;
-      if (allowance < document.content.length) truncated = true;
+      const allowance = Math.min(MAX_DOCUMENT_CONTEXT_CHARS, remaining, document.charCount);
+      if (allowance <= 0) continue;
+      documents.push({ id: document.id, name: document.name, charCount: allowance });
+      totalChars += allowance;
+      remaining -= allowance;
+      if (allowance < document.charCount) truncated = true;
     }
 
-    return { documents, totalChars, truncated };
+    return { documents, ids: documents.map((document) => document.id), totalChars, truncated };
   }
 
   function updateContextSummary() {
@@ -897,16 +979,17 @@
           Accept: 'application/json'
         },
         body: JSON.stringify({
-          messages: state.chatMessages
-            .filter((message) => !message.isError)
-            .slice(-MAX_CHAT_HISTORY)
-            .map(({ role, content: text }) => ({ role, content: text })),
+          message: content,
           industry: state.chatIndustry,
-          knowledge: knowledgeContext.documents
+          knowledgeIds: knowledgeContext.ids
         })
       });
       const payload = await response.json().catch(() => ({}));
       typing.remove();
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
       if (!response.ok) {
         throw new Error(getChatErrorMessage(response.status, payload.code, payload.error));
       }
@@ -943,6 +1026,8 @@
       AI_UPSTREAM_UNREACHABLE: '无法连接 AI 服务，请检查 API 地址和网络。',
       RATE_LIMITED: '请求过于频繁，请等待一分钟后再试。',
       DAILY_LIMIT_REACHED: '今日公开 AI 使用额度已用完，请明天再试。',
+      USER_DAILY_LIMIT_REACHED: '今日个人 AI 使用额度已用完，请明天再试。',
+      AUTH_REQUIRED: '登录已过期，请重新登录。',
       CONVERSATION_TOO_LONG: '当前对话较长，请清空对话后重新开始。',
       KNOWLEDGE_TOO_LONG: '选中的个人资料过长，请减少资料或缩短内容。'
     };
@@ -1142,22 +1227,42 @@
     });
   }
 
-  function clearChat() {
+  async function clearChat() {
     if (!state.chatMessages.length) {
       showToast('当前没有对话记录');
       return;
     }
-    state.chatMessages = [];
-    state.chatLoading = false;
-    const preservedWelcome = elements.welcomeBlock;
-    elements.chatStream.replaceChildren(preservedWelcome);
-    preservedWelcome.hidden = false;
-    applyApiStatus(state.api || {});
-    showToast('对话已清空');
+    try {
+      const response = await fetch('/api/chat/history', {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error || '清空对话失败');
+      state.chatMessages = [];
+      state.chatLoading = false;
+      const preservedWelcome = elements.welcomeBlock;
+      elements.chatStream.replaceChildren(preservedWelcome);
+      preservedWelcome.hidden = false;
+      applyApiStatus(state.api || {});
+      showToast('对话已清空');
+    } catch (error) {
+      showToast(error.message || '清空对话失败');
+    }
   }
 
   function renderChatState() {
-    hideWelcomeIfMessages();
+    if (!state.chatMessages.length) return;
+    hideWelcome();
+    state.chatMessages.forEach((message) => {
+      if (message.role === 'user') appendUserMessage(message.content, 0);
+      else if (message.role === 'assistant') appendAssistantMessage(message);
+    });
+    scrollChatToBottom();
   }
 
   function hideWelcomeIfMessages() {
@@ -1172,80 +1277,48 @@
 
   async function loadDocuments() {
     try {
-      state.documents = await getAllDocumentsFromDb();
+      const response = await fetch('/api/knowledge', {
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error || '无法读取账号知识库');
+      state.documents = Array.isArray(payload.documents) ? payload.documents : [];
       state.documents.sort(sortDocuments);
       const existingIds = new Set(state.documents.map((document) => document.id));
       state.selectedIds = new Set([...state.selectedIds].filter((id) => existingIds.has(id)));
       persistSelectedIds();
-    } catch {
+    } catch (error) {
       state.documents = [];
-      showToast('无法打开浏览器本地知识库');
+      showToast(error.message || '无法读取账号知识库');
     }
   }
 
-  function openKnowledgeDatabase() {
-    if (state.dbPromise) return state.dbPromise;
-    state.dbPromise = new Promise((resolve, reject) => {
-      if (!('indexedDB' in window)) {
-        reject(new Error('当前浏览器不支持 IndexedDB'));
+  async function loadChatHistory() {
+    try {
+      const response = await fetch('/api/chat/history', {
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
         return;
       }
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(DB_STORE)) {
-          database.createObjectStore(DB_STORE, { keyPath: 'id' });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error('无法打开知识库'));
-    });
-    return state.dbPromise;
+      if (!response.ok) throw new Error(payload.error || '无法读取对话记录');
+      state.chatMessages = Array.isArray(payload.messages) ? payload.messages : [];
+    } catch (error) {
+      state.chatMessages = [];
+      showToast(error.message || '无法读取对话记录');
+    }
   }
 
-  async function getAllDocumentsFromDb() {
-    const database = await openKnowledgeDatabase();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(DB_STORE, 'readonly');
-      const request = transaction.objectStore(DB_STORE).getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async function saveDocument(document) {
-    const database = await openKnowledgeDatabase();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(DB_STORE, 'readwrite');
-      transaction.objectStore(DB_STORE).put(document);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  }
-
-  async function deleteDocumentFromDb(documentId) {
-    const database = await openKnowledgeDatabase();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(DB_STORE, 'readwrite');
-      transaction.objectStore(DB_STORE).delete(documentId);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  }
-
-  async function clearDocumentsFromDb() {
-    const database = await openKnowledgeDatabase();
-    return new Promise((resolve, reject) => {
-      const transaction = database.transaction(DB_STORE, 'readwrite');
-      transaction.objectStore(DB_STORE).clear();
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  }
-
-  function readSelectedIds() {
+  function readSelectedIds(userId) {
     try {
-      const value = JSON.parse(localStorage.getItem(SELECTED_STORAGE_KEY) || '[]');
+      const key = `${SELECTED_STORAGE_PREFIX}:${userId}`;
+      const value = JSON.parse(localStorage.getItem(key) || '[]');
       return new Set(Array.isArray(value) ? value.filter((id) => typeof id === 'string') : []);
     } catch {
       return new Set();
@@ -1253,18 +1326,13 @@
   }
 
   function persistSelectedIds() {
+    if (!state.user) return;
     try {
-      localStorage.setItem(SELECTED_STORAGE_KEY, JSON.stringify([...state.selectedIds]));
+      const key = `${SELECTED_STORAGE_PREFIX}:${state.user.id}`;
+      localStorage.setItem(key, JSON.stringify([...state.selectedIds]));
     } catch {
-      // Selection persistence is optional; documents remain in IndexedDB.
+      // Selection persistence is optional; documents remain in the account storage.
     }
-  }
-
-  function createId() {
-    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-      return window.crypto.randomUUID();
-    }
-    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
 
   function formatDate(value) {

@@ -1,6 +1,7 @@
 node_modules/
 .env
 .runtime/
+.data/
 .DS_Store
 Thumbs.db
 *.log

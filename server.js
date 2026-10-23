@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { URL } = require('node:url');
 const { industries, getResources, buildResourceContext } = require('./data/resources');
+const { createUserStore, UserStoreError } = require('./lib/user-store');
 
 const ROOT = __dirname;
 const PUBLIC_ROOT = path.join(ROOT, 'public');
@@ -17,6 +18,10 @@ const MAX_TOTAL_CHARS = 18000;
 const MAX_KNOWLEDGE_DOCS = 6;
 const MAX_KNOWLEDGE_DOC_CHARS = 12000;
 const MAX_KNOWLEDGE_CHARS = 24000;
+const SESSION_COOKIE = 'industry_ai_session';
+const SESSION_COOKIE_MS = 30 * 24 * 60 * 60 * 1000;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT = 10;
 
@@ -33,10 +38,19 @@ const MIME_TYPES = {
 };
 
 const rateBuckets = new Map();
+const authBuckets = new Map();
 const publicUsage = {
   day: '',
   count: 0
 };
+let userStore = null;
+
+function getUserStore() {
+  if (!userStore) {
+    userStore = createUserStore(process.env.APP_DATA_DIR || path.join(ROOT, '.data'));
+  }
+  return userStore;
+}
 
 function loadLocalEnv() {
   const envFile = path.join(ROOT, '.env');
@@ -103,6 +117,91 @@ function isLocalRequest(req) {
   }
 }
 
+function parseCookies(req) {
+  return String(req.headers.cookie || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separator = part.indexOf('=');
+      if (separator <= 0) return cookies;
+      try {
+        const key = decodeURIComponent(part.slice(0, separator));
+        const value = decodeURIComponent(part.slice(separator + 1));
+        cookies[key] = value;
+      } catch {
+        // Ignore malformed cookie pairs instead of failing the request.
+      }
+      return cookies;
+    }, {});
+}
+
+function getSessionToken(req) {
+  return parseCookies(req)[SESSION_COOKIE] || '';
+}
+
+function isSecureRequest(req) {
+  return Boolean(
+    req.socket.encrypted ||
+      String(req.headers['x-forwarded-proto'] || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase() === 'https'
+  );
+}
+
+function createSessionCookie(req, token) {
+  const parts = [
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${Math.floor(SESSION_COOKIE_MS / 1000)}`
+  ];
+  if (isSecureRequest(req)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function clearSessionCookie(req) {
+  const parts = [
+    `${SESSION_COOKIE}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0'
+  ];
+  if (isSecureRequest(req)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function getAuthenticatedUser(req) {
+  return getUserStore().getSessionUser(getSessionToken(req));
+}
+
+function requireAuthenticatedUser(req, res) {
+  const user = getAuthenticatedUser(req);
+  if (!user) {
+    json(res, 401, {
+      error: '请先登录后再使用个人知识库和 AI 助手。',
+      code: 'AUTH_REQUIRED'
+    });
+    return null;
+  }
+  return user;
+}
+
+function checkAuthRateLimit(ip) {
+  const now = Date.now();
+  const bucket = authBuckets.get(ip);
+  if (!bucket || now - bucket.startedAt >= AUTH_WINDOW_MS) {
+    authBuckets.set(ip, { count: 1, startedAt: now });
+    return true;
+  }
+  if (bucket.count >= AUTH_RATE_LIMIT) return false;
+  bucket.count += 1;
+  return true;
+}
+
 function checkRateLimit(ip) {
   const now = Date.now();
   const bucket = rateBuckets.get(ip);
@@ -125,6 +224,9 @@ function cleanRateBuckets() {
   const now = Date.now();
   for (const [ip, bucket] of rateBuckets) {
     if (now - bucket.startedAt > RATE_WINDOW_MS * 2) rateBuckets.delete(ip);
+  }
+  for (const [ip, bucket] of authBuckets) {
+    if (now - bucket.startedAt > AUTH_WINDOW_MS * 2) authBuckets.delete(ip);
   }
 }
 
@@ -353,58 +455,6 @@ function consumePublicDailyQuota() {
   return { allowed: true, remaining: limit - publicUsage.count };
 }
 
-function validateKnowledge(input) {
-  if (input == null) return [];
-  if (!Array.isArray(input)) {
-    throw Object.assign(new Error('knowledge 必须是数组'), {
-      status: 400,
-      code: 'INVALID_KNOWLEDGE'
-    });
-  }
-  if (input.length > MAX_KNOWLEDGE_DOCS) {
-    throw Object.assign(new Error(`单次最多选择 ${MAX_KNOWLEDGE_DOCS} 份个人资料`), {
-      status: 400,
-      code: 'TOO_MANY_KNOWLEDGE_DOCS'
-    });
-  }
-
-  let totalChars = 0;
-  const documents = input.map((document) => {
-    const name = document && document.name;
-    const content = document && document.content;
-    if (typeof name !== 'string' || typeof content !== 'string') {
-      throw Object.assign(new Error('个人资料格式无效'), {
-        status: 400,
-        code: 'INVALID_KNOWLEDGE_DOC'
-      });
-    }
-    const trimmedName = name.trim();
-    const trimmedContent = content.trim();
-    if (!trimmedName || trimmedName.length > 160 || !trimmedContent) {
-      throw Object.assign(new Error('个人资料名称或内容无效'), {
-        status: 400,
-        code: 'INVALID_KNOWLEDGE_DOC'
-      });
-    }
-    if (trimmedContent.length > MAX_KNOWLEDGE_DOC_CHARS) {
-      throw Object.assign(new Error(`单份个人资料最多提供 ${MAX_KNOWLEDGE_DOC_CHARS} 个字符`), {
-        status: 400,
-        code: 'KNOWLEDGE_DOC_TOO_LONG'
-      });
-    }
-    totalChars += trimmedContent.length;
-    return { name: trimmedName, content: trimmedContent };
-  });
-
-  if (totalChars > MAX_KNOWLEDGE_CHARS) {
-    throw Object.assign(new Error(`个人资料总内容不能超过 ${MAX_KNOWLEDGE_CHARS} 个字符`), {
-      status: 400,
-      code: 'KNOWLEDGE_TOO_LONG'
-    });
-  }
-  return documents;
-}
-
 function buildKnowledgePrompt(knowledge) {
   if (!knowledge.length) return '';
   const documents = knowledge
@@ -559,10 +609,29 @@ async function handleChat(req, res) {
     return;
   }
 
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+
   try {
     const body = await readJsonBody(req);
-    const messages = validateMessages(body.messages);
-    const knowledge = validateKnowledge(body.knowledge);
+    let userContent = typeof body.message === 'string' ? body.message.trim() : '';
+    if (!userContent && Array.isArray(body.messages)) {
+      const fallbackMessages = validateMessages(body.messages);
+      userContent = fallbackMessages[fallbackMessages.length - 1].content;
+    }
+    if (!userContent || userContent.length > MAX_MESSAGE_CHARS) {
+      throw Object.assign(new Error(`消息需为 1–${MAX_MESSAGE_CHARS} 个字符`), {
+        status: 400,
+        code: 'INVALID_MESSAGE_LENGTH'
+      });
+    }
+
+    const store = getUserStore();
+    const knowledge = store.getKnowledgeByIds(user.id, body.knowledgeIds || [], {
+      maxDocuments: MAX_KNOWLEDGE_DOCS,
+      maxDocumentChars: MAX_KNOWLEDGE_DOC_CHARS,
+      maxTotalChars: MAX_KNOWLEDGE_CHARS
+    });
     const industry = ['all', 'food', 'beauty'].includes(body.industry) ? body.industry : 'all';
     const dailyQuota = consumePublicDailyQuota();
     if (!dailyQuota.allowed) {
@@ -572,7 +641,26 @@ async function handleChat(req, res) {
       });
       return;
     }
-    const result = await requestChatCompletion({ messages, industry, knowledge });
+    const userDailyLimit = clampInteger(process.env.USER_DAILY_REQUEST_LIMIT, 80, 0, 5000);
+    const userQuota = store.consumeDailyChat(user.id, userDailyLimit);
+    if (!userQuota.allowed) {
+      json(res, 429, {
+        error: '今日个人 AI 使用额度已用完，请明天再试。',
+        code: 'USER_DAILY_LIMIT_REACHED'
+      });
+      return;
+    }
+
+    const history = store
+      .getChatHistory(user.id)
+      .slice(-10)
+      .map(({ role, content }) => ({ role, content }));
+    const result = await requestChatCompletion({
+      messages: [...history, { role: 'user', content: userContent }],
+      industry,
+      knowledge
+    });
+    store.appendChatExchange(user.id, userContent, result.message);
     json(res, 200, result);
   } catch (error) {
     const status = Number.isInteger(error.status) ? error.status : 500;
@@ -585,6 +673,147 @@ async function handleChat(req, res) {
         code: error.code || 'INTERNAL_ERROR'
       }
     );
+  }
+}
+
+function sendAuthError(res, error) {
+  const status =
+    error instanceof UserStoreError
+      ? error.status
+      : Number.isInteger(error.status)
+        ? error.status
+        : 500;
+  json(res, status, {
+    error: status >= 500 ? '账号服务暂时不可用' : error.message,
+    code: error.code || 'AUTH_ERROR'
+  });
+}
+
+async function handleRegister(req, res) {
+  if (!checkAuthRateLimit(getClientIp(req))) {
+    json(res, 429, { error: '操作过于频繁，请稍后再试。', code: 'AUTH_RATE_LIMITED' });
+    return;
+  }
+  try {
+    const body = await readJsonBody(req);
+    const user = getUserStore().register(body.username, body.password);
+    const session = getUserStore().createSession(user.id);
+    json(
+      res,
+      201,
+      { authenticated: true, user },
+      { 'Set-Cookie': createSessionCookie(req, session.token) }
+    );
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+async function handleLogin(req, res) {
+  if (!checkAuthRateLimit(getClientIp(req))) {
+    json(res, 429, { error: '登录尝试过于频繁，请稍后再试。', code: 'AUTH_RATE_LIMITED' });
+    return;
+  }
+  try {
+    const body = await readJsonBody(req);
+    const user = getUserStore().authenticate(body.username, body.password);
+    const session = getUserStore().createSession(user.id);
+    json(
+      res,
+      200,
+      { authenticated: true, user },
+      { 'Set-Cookie': createSessionCookie(req, session.token) }
+    );
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleLogout(req, res) {
+  getUserStore().revokeSession(getSessionToken(req));
+  json(res, 200, { authenticated: false }, { 'Set-Cookie': clearSessionCookie(req) });
+}
+
+function handleSession(req, res) {
+  const user = getAuthenticatedUser(req);
+  json(res, 200, { authenticated: Boolean(user), user: user || null });
+}
+
+function handleKnowledgeList(req, res) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    json(res, 200, {
+      documents: getUserStore().listDocuments(user.id),
+      limits: getUserStore().limits
+    });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+async function handleKnowledgeCreate(req, res) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    const body = await readJsonBody(req);
+    const document = getUserStore().createDocument(user.id, body);
+    json(res, 201, { document });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleKnowledgeGet(req, res, documentId) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    json(res, 200, { document: getUserStore().getDocument(user.id, documentId, true) });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleKnowledgeDelete(req, res, documentId) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    getUserStore().deleteDocument(user.id, documentId);
+    json(res, 200, { deleted: true });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleKnowledgeClear(req, res) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    getUserStore().clearDocuments(user.id);
+    json(res, 200, { cleared: true });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleChatHistoryGet(req, res) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    json(res, 200, { messages: getUserStore().getChatHistory(user.id) });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+function handleChatHistoryClear(req, res) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+  try {
+    getUserStore().clearChatHistory(user.id);
+    json(res, 200, { cleared: true });
+  } catch (error) {
+    sendAuthError(res, error);
   }
 }
 
@@ -673,12 +902,12 @@ async function handleTestAiConfig(req, res) {
 }
 
 function serveStatic(req, res, pathname) {
-  let relative =
-    pathname === '/'
-      ? 'index.html'
-      : pathname === '/assistant'
-        ? 'assistant.html'
-        : decodeURIComponent(pathname).replace(/^\/+/, '');
+  const aliases = {
+    '/': 'index.html',
+    '/assistant': 'assistant.html',
+    '/login': 'login.html'
+  };
+  let relative = aliases[pathname] || decodeURIComponent(pathname).replace(/^\/+/, '');
   if (relative.includes('\0')) return sendNotFound(res);
 
   const filePath = path.resolve(PUBLIC_ROOT, relative);
@@ -706,6 +935,7 @@ function sendNotFound(res) {
 
 function createApp() {
   loadLocalEnv();
+  getUserStore();
   return http.createServer(async (req, res) => {
     const requestUrl = new URL(req.url, 'http://localhost');
     const pathname = requestUrl.pathname;
@@ -713,6 +943,26 @@ function createApp() {
     try {
       if (pathname === '/api/health' && req.method === 'GET') {
         json(res, 200, { status: 'ok', service: 'industry-ai-toolkit' });
+        return;
+      }
+
+      if (pathname === '/api/auth/register' && req.method === 'POST') {
+        await handleRegister(req, res);
+        return;
+      }
+
+      if (pathname === '/api/auth/login' && req.method === 'POST') {
+        await handleLogin(req, res);
+        return;
+      }
+
+      if (pathname === '/api/auth/logout' && req.method === 'POST') {
+        handleLogout(req, res);
+        return;
+      }
+
+      if (pathname === '/api/auth/session' && req.method === 'GET') {
+        handleSession(req, res);
         return;
       }
 
@@ -755,6 +1005,42 @@ function createApp() {
           industries,
           resources: getResources({ industry })
         });
+        return;
+      }
+
+      if (pathname === '/api/knowledge' && req.method === 'GET') {
+        handleKnowledgeList(req, res);
+        return;
+      }
+
+      if (pathname === '/api/knowledge' && req.method === 'POST') {
+        await handleKnowledgeCreate(req, res);
+        return;
+      }
+
+      if (pathname === '/api/knowledge' && req.method === 'DELETE') {
+        handleKnowledgeClear(req, res);
+        return;
+      }
+
+      const knowledgeMatch = pathname.match(/^\/api\/knowledge\/([^/]+)$/);
+      if (knowledgeMatch && req.method === 'GET') {
+        handleKnowledgeGet(req, res, decodeURIComponent(knowledgeMatch[1]));
+        return;
+      }
+
+      if (knowledgeMatch && req.method === 'DELETE') {
+        handleKnowledgeDelete(req, res, decodeURIComponent(knowledgeMatch[1]));
+        return;
+      }
+
+      if (pathname === '/api/chat/history' && req.method === 'GET') {
+        handleChatHistoryGet(req, res);
+        return;
+      }
+
+      if (pathname === '/api/chat/history' && req.method === 'DELETE') {
+        handleChatHistoryClear(req, res);
         return;
       }
 

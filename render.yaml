@@ -16,5 +16,13 @@ services:
         sync: false
       - key: AI_MAX_TOKENS
         value: "1200"
+      - key: USER_DAILY_REQUEST_LIMIT
+        value: "80"
       - key: PUBLIC_DAILY_REQUEST_LIMIT
         value: "300"
+      - key: APP_DATA_DIR
+        value: /app/.data
+    disk:
+      name: industry-ai-user-data
+      mountPath: /app/.data
+      sizeGB: 1

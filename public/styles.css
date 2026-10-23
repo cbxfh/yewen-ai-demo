@@ -306,6 +306,24 @@ button:disabled {
   transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
+.header-login-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 13px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--paper-deep);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.header-login-button:hover {
+  background: var(--lime);
+  border-color: transparent;
+}
+
 .header-api-button:hover {
   color: var(--ink);
   background: var(--cream);
@@ -342,6 +360,10 @@ button:disabled {
 }
 
 .nav-settings-link {
+  display: none;
+}
+
+.nav-login-link {
   display: none;
 }
 
@@ -3853,6 +3875,10 @@ body {
   .nav-settings-link {
     display: none;
   }
+
+  .nav-login-link {
+    display: none;
+  }
 }
 
 @media (max-width: 760px) {
@@ -3865,7 +3891,15 @@ body {
     font-size: 10.5pt;
   }
 
+  .header-login-button {
+    display: none;
+  }
+
   .main-nav .nav-settings-link {
+    display: block;
+  }
+
+  .main-nav .nav-login-link {
     display: block;
   }
 
