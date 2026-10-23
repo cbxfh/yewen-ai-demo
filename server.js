@@ -76,6 +76,8 @@ function securityHeaders(contentType = '') {
 
 function getClientIp(req) {
   if (process.env.TRUST_PROXY === '1') {
+    const cloudflareIp = String(req.headers['cf-connecting-ip'] || '').trim();
+    if (cloudflareIp) return cloudflareIp;
     const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     if (forwardedFor) return forwardedFor;
   }
