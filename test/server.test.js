@@ -110,7 +110,7 @@ test('index page includes security headers and primary content', async () => {
   assert.match(response.headers.get('content-type'), /text\/html/);
   assert.match(response.headers.get('content-security-policy'), /script-src 'self'/);
   const html = await response.text();
-  assert.match(html, /行业 AI 工具包/);
+  assert.match(html, /业问/);
   assert.match(html, /餐饮/);
   assert.match(html, /美容美发/);
   assert.match(html, /AI/);

@@ -537,7 +537,7 @@ function buildSystemPrompt(industry, knowledge = []) {
   const context = buildResourceContext(industry, 12000);
   const knowledgePrompt = buildKnowledgePrompt(knowledge);
   return [
-    '你是“行业 AI 工具包”的专业经营助理。',
+    '你是“业问”的专业经营助理。',
     `当前服务范围是：${industryLabels[industry]}。`,
     '你的回答要面向门店一线执行，优先给出判断依据、步骤、检查项和注意事项。',
     '下方是站内示例资料。引用时可使用「参考：《资料标题》」；不要编造站外资料、数据或法规条文。',
@@ -1244,7 +1244,7 @@ if (require.main === module) {
   const host = process.env.HOST || '127.0.0.1';
   app.listen(port, host, () => {
     const config = getAiConfig();
-    console.log(`行业 AI 工具包已启动：http://${host}:${port}`);
+    console.log(`业问已启动：http://${host}:${port}`);
     if (host === '0.0.0.0') {
       const addresses = Object.values(os.networkInterfaces())
         .flat()

@@ -59,7 +59,7 @@
     elements.confirmField.hidden = !isRegister;
     elements.confirmPassword.required = isRegister;
     elements.password.autocomplete = isRegister ? 'new-password' : 'current-password';
-    elements.title.textContent = isRegister ? '创建一个独立账号' : '欢迎回来';
+    elements.title.textContent = isRegister ? '创建业问账号' : '欢迎使用业问';
     elements.submit.firstChild.textContent = isRegister ? '注册并进入 ' : '登录 ';
     elements.note.textContent = isRegister
       ? '注册后将自动登录。当前版本不提供邮箱找回密码，请妥善保存账号信息。'

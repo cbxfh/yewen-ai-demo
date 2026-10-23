@@ -1,6 +1,6 @@
 {
   "name": "industry-ai-toolkit",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "餐饮与美容美发行业 AI 助手与个人知识库",
   "main": "server.js",
