@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="行业 AI 助手工作台：导入个人资料，结合双行业知识库进行对话分析。"
+    >
+    <meta name="theme-color" content="#1b2720">
+    <title>AI 助手与个人知识库｜行业 AI 工具包</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/assistant.css">
+  </head>
+  <body>
+    <svg class="svg-sprite" aria-hidden="true">
+      <symbol id="icon-arrow-left" viewBox="0 0 24 24">
+        <path d="M19 12H5M10 7l-5 5 5 5"></path>
+      </symbol>
+      <symbol id="icon-spark" viewBox="0 0 24 24">
+        <path d="m12 3-1.6 5.4L5 10l5.4 1.6L12 17l1.6-5.4L19 10l-5.4-1.6L12 3Z"></path>
+        <path d="m5 17 .7 2.3L8 20l-2.3.7L5 23l-.7-2.3L2 20l2.3-.7L5 17Z"></path>
+      </symbol>
+      <symbol id="icon-settings" viewBox="0 0 24 24">
+        <path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path>
+        <circle cx="16" cy="7" r="2"></circle>
+        <circle cx="8" cy="17" r="2"></circle>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14"></path>
+      </symbol>
+      <symbol id="icon-upload" viewBox="0 0 24 24">
+        <path d="M12 16V4M7 9l5-5 5 5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
+      </symbol>
+      <symbol id="icon-doc" viewBox="0 0 24 24">
+        <path d="M6 3h8l4 4v14H6V3Z"></path>
+        <path d="M14 3v5h5M9 12h6M9 16h6"></path>
+      </symbol>
+      <symbol id="icon-paste" viewBox="0 0 24 24">
+        <path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"></path>
+        <path d="M9 3h6v5H9V3ZM13 11h8M18 8l3 3-3 3"></path>
+      </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M4 7h16M9 3h6l1 4H8l1-4ZM7 7l1 14h8l1-14M10 11v6M14 11v6"></path>
+      </symbol>
+      <symbol id="icon-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6"></path>
+      </symbol>
+      <symbol id="icon-close" viewBox="0 0 24 24">
+        <path d="m6 6 12 12M18 6 6 18"></path>
+      </symbol>
+      <symbol id="icon-send" viewBox="0 0 24 24">
+        <path d="m21 3-7.2 18-3.1-7.7L3 10.2 21 3Z"></path>
+        <path d="m10.7 13.3 4.6-4.6"></path>
+      </symbol>
+      <symbol id="icon-menu" viewBox="0 0 24 24">
+        <path d="M4 7h16M4 12h16M4 17h16"></path>
+      </symbol>
+      <symbol id="icon-chevron" viewBox="0 0 24 24">
+        <path d="m8 10 4 4 4-4"></path>
+      </symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24">
+        <path d="M12 3 5 6v5c0 4.5 2.8 8.1 7 10 4.2-1.9 7-5.5 7-10V6l-7-3Z"></path>
+        <path d="m9 12 2 2 4-4"></path>
+      </symbol>
+      <symbol id="icon-eye" viewBox="0 0 24 24">
+        <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"></path>
+        <circle cx="12" cy="12" r="2.5"></circle>
+      </symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7"></circle>
+        <path d="m20 20-4-4"></path>
+      </symbol>
+      <symbol id="icon-arrow-up-right" viewBox="0 0 24 24">
+        <path d="M7 17 17 7M8 7h9v9"></path>
+      </symbol>
+      <symbol id="icon-rotate" viewBox="0 0 24 24">
+        <path d="M20 8v5h-5M4 16v-5h5"></path>
+        <path d="M6.1 8A7.5 7.5 0 0 1 19 10M17.9 16A7.5 7.5 0 0 1 5 14"></path>
+      </symbol>
+    </svg>
+
+    <header class="workspace-header">
+      <a class="workspace-brand" href="/" aria-label="返回行业 AI 工具包首页">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </span>
+        <span class="brand-text">
+          <strong>行业 AI 工具包</strong>
+          <small>AI WORKSPACE</small>
+        </span>
+      </a>
+      <nav class="workspace-nav" aria-label="工作台导航">
+        <a href="/">首页</a>
+        <a href="/#library">专业资料</a>
+        <a class="active" href="/assistant.html">AI 助手</a>
+      </nav>
+      <div class="header-actions">
+        <a class="back-site-link" href="/">
+          <svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
+          返回网站
+        </a>
+        <button class="api-entry-button" id="open-api-settings" type="button">
+          <svg class="icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
+          API 设置
+          <span class="api-status-dot" id="header-api-dot"></span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace-layout">
+      <aside class="knowledge-panel" id="knowledge-panel" aria-labelledby="knowledge-title">
+        <div class="knowledge-panel-head">
+          <div>
+            <span class="local-badge">
+              <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+              仅保存在此浏览器
+            </span>
+            <h1 id="knowledge-title">个人知识库</h1>
+            <p>导入你的 SOP、运营记录或培训资料，让 AI 结合原文回答。</p>
+          </div>
+          <button
+            class="mobile-panel-close icon-button"
+            id="close-knowledge-panel"
+            type="button"
+            aria-label="关闭知识库面板"
+          >
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </div>
+
+        <div class="knowledge-import">
+          <div class="drop-zone" id="drop-zone">
+            <span class="drop-icon">
+              <svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg>
+            </span>
+            <strong>拖入文件，或选择导入</strong>
+            <span>TXT · MD · CSV · JSON · HTML</span>
+            <div class="import-actions">
+              <button class="primary-small-button" id="choose-files" type="button">
+                选择文件
+              </button>
+              <button class="secondary-small-button" id="open-paste" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#icon-paste"></use></svg>
+                粘贴文本
+              </button>
+            </div>
+          </div>
+          <input
+            id="file-input"
+            type="file"
+            accept=".txt,.md,.markdown,.csv,.json,.html,.htm,text/plain,text/markdown,text/csv,application/json,text/html"
+            multiple
+            hidden
+          >
+        </div>
+
+        <div class="knowledge-toolbar">
+          <div class="knowledge-search">
+            <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+            <label class="sr-only" for="knowledge-search">搜索个人资料</label>
+            <input id="knowledge-search" type="search" placeholder="搜索资料名称">
+          </div>
+          <button class="text-button" id="select-all-knowledge" type="button">全选</button>
+        </div>
+
+        <div class="knowledge-list" id="knowledge-list" aria-live="polite">
+          <div class="knowledge-empty">
+            <span class="empty-file-stack" aria-hidden="true">
+              <i></i><i></i><i></i>
+            </span>
+            <strong>还没有个人资料</strong>
+            <p>先导入一份门店制度、会议纪要或产品说明。</p>
+          </div>
+        </div>
+
+        <footer class="knowledge-panel-foot">
+          <div class="context-usage">
+            <span id="selected-doc-count">已选 0 份</span>
+            <span id="selected-char-count">0 / 24,000 字</span>
+          </div>
+          <div class="context-meter" aria-hidden="true"><span id="context-meter-fill"></span></div>
+          <p>对话时仅发送已勾选资料的文本摘录，单次最多参考 24,000 字。</p>
+          <button class="clear-all-button" id="clear-all-knowledge" type="button">
+            清空个人知识库
+          </button>
+        </footer>
+      </aside>
+
+      <section class="chat-workspace" aria-labelledby="assistant-title">
+        <header class="chat-topbar">
+          <div class="assistant-heading">
+            <button
+              class="mobile-knowledge-toggle icon-button"
+              id="open-knowledge-panel"
+              type="button"
+              aria-label="打开个人知识库"
+            >
+              <svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg>
+            </button>
+            <span class="assistant-mark">
+              <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+            </span>
+            <div>
+              <h2 id="assistant-title">行业 AI 助手</h2>
+              <p>
+                <span class="api-status-dot" id="chat-api-dot"></span>
+                <span id="chat-api-status">正在检查 API 状态</span>
+              </p>
+            </div>
+          </div>
+          <div class="chat-top-actions">
+            <div class="industry-switch" role="group" aria-label="选择回答范围">
+              <button class="active" type="button" data-chat-industry="all">全部</button>
+              <button type="button" data-chat-industry="food">餐饮</button>
+              <button type="button" data-chat-industry="beauty">美业</button>
+            </div>
+            <button class="icon-button clear-chat-button" id="clear-chat" type="button" aria-label="清空对话">
+              <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="active-context-bar">
+          <div class="active-context-copy">
+            <span class="context-pulse"></span>
+            <span id="active-context-text">当前使用站内专业资料</span>
+          </div>
+          <button class="manage-context-button" id="manage-context" type="button">
+            管理资料
+            <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg>
+          </button>
+        </div>
+
+        <div class="chat-stream" id="chat-stream" aria-live="polite">
+          <section class="welcome-block" id="welcome-block">
+            <span class="welcome-kicker">YOUR INDUSTRY COPILOT</span>
+            <h2>把门店问题，<br><em>放在桌面上谈。</em></h2>
+            <p>
+              导入自己的资料后，我会优先基于原文分析。你可以让我找问题、
+              做培训提纲、整理会议结论，或把零散经验变成执行清单。
+            </p>
+
+            <div class="setup-steps" id="setup-steps">
+              <button class="setup-step" id="welcome-api-config" type="button">
+                <span>01</span>
+                <div>
+                  <strong>接入 AI 服务</strong>
+                  <p>填写 API 地址、模型和密钥</p>
+                </div>
+                <svg class="icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
+              </button>
+              <button class="setup-step" id="welcome-import" type="button">
+                <span>02</span>
+                <div>
+                  <strong>导入个人资料</strong>
+                  <p>支持文本类文件与直接粘贴</p>
+                </div>
+                <svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg>
+              </button>
+            </div>
+
+            <div class="starter-prompts">
+              <span>从一个真实问题开始</span>
+              <div>
+                <button type="button" data-starter-prompt="请先阅读我选中的个人资料，提炼门店最重要的 5 个管理问题，并按优先级排序。">
+                  提炼资料中的管理问题
+                </button>
+                <button type="button" data-starter-prompt="请对比我选中的资料，找出内容冲突、重复或缺失的关键环节，并给出一份修订建议。">
+                  检查冲突与缺失
+                </button>
+                <button type="button" data-starter-prompt="请根据我选中的个人资料，为门店员工设计一份 30 分钟培训提纲，包含案例讨论题和现场检查项。">
+                  生成员工培训提纲
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="chat-config-notice" id="chat-config-notice" hidden>
+          <div>
+            <strong>还差一步就能开始对话</strong>
+            <span>完成 API 设置后，AI 助手即可结合你的知识库回答问题。</span>
+          </div>
+          <button type="button" id="notice-api-config">去设置 API</button>
+        </div>
+
+        <form class="workspace-composer" id="workspace-chat-form">
+          <label class="sr-only" for="workspace-chat-input">向行业 AI 助手提问</label>
+          <textarea
+            id="workspace-chat-input"
+            rows="1"
+            maxlength="4000"
+            placeholder="输入一个门店问题，或让 AI 分析你选中的资料…"
+            disabled
+          ></textarea>
+          <button class="workspace-send-button" id="workspace-send" type="submit" disabled aria-label="发送消息">
+            <svg class="icon" aria-hidden="true"><use href="#icon-send"></use></svg>
+          </button>
+          <div class="composer-help">
+            <span>Enter 发送 · Shift + Enter 换行</span>
+            <span id="context-send-hint">当前未选择个人资料</span>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <div class="knowledge-backdrop" id="knowledge-backdrop" hidden></div>
+
+    <div class="modal-layer" id="api-settings-modal" hidden>
+      <div class="modal-backdrop" data-close-settings></div>
+      <section
+        class="settings-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        tabindex="-1"
+      >
+        <header class="modal-head">
+          <div>
+            <span class="modal-kicker">API CONNECTION</span>
+            <h2 id="settings-title">接入 AI 服务</h2>
+            <p>支持兼容 OpenAI Chat Completions 的服务。密钥只提交给本机服务端。</p>
+          </div>
+          <button class="icon-button" type="button" data-close-settings aria-label="关闭 API 设置">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </header>
+
+        <div class="settings-status-card" id="settings-status-card">
+          <span class="api-status-dot" id="settings-api-dot"></span>
+          <div>
+            <strong id="settings-status-title">正在检查配置</strong>
+            <p id="settings-status-copy">请稍候…</p>
+          </div>
+        </div>
+
+        <form id="api-settings-form" class="settings-form">
+          <label>
+            <span>API 基础地址</span>
+            <input
+              id="api-base-url"
+              name="baseUrl"
+              type="url"
+              placeholder="https://provider.example.com/v1"
+              autocomplete="url"
+              required
+            >
+            <small>可填写 v1 基础地址，也可直接填写完整 /chat/completions 地址。</small>
+          </label>
+          <label>
+            <span>模型 ID</span>
+            <input
+              id="api-model"
+              name="model"
+              type="text"
+              placeholder="例如：供应商控制台中的模型名称"
+              autocomplete="off"
+              required
+            >
+          </label>
+          <label>
+            <span>API Key</span>
+            <input
+              id="api-key"
+              name="apiKey"
+              type="password"
+              placeholder="输入服务端密钥"
+              autocomplete="new-password"
+            >
+            <small id="api-key-help">密钥不会返回到浏览器。已保存后可留空保持原值。</small>
+          </label>
+          <label class="small-field">
+            <span>最大回复长度</span>
+            <input
+              id="api-max-tokens"
+              name="maxTokens"
+              type="number"
+              min="256"
+              max="4096"
+              step="1"
+              value="1200"
+            >
+          </label>
+          <p class="local-only-note" id="local-config-note">
+            <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+            为避免远程篡改密钥，设置入口只允许在本机访问。配置保存在服务端
+            <code>.runtime/ai-config.json</code>，该文件不会提交到 Git。
+          </p>
+          <div class="settings-actions">
+            <button class="danger-text-button" id="clear-api-config" type="button">清除本机配置</button>
+            <div>
+              <button class="secondary-button" id="test-api-config" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#icon-rotate"></use></svg>
+                测试连接
+              </button>
+              <button class="primary-button" id="save-api-config" type="submit">保存配置</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-layer" id="paste-modal" hidden>
+      <div class="modal-backdrop" data-close-paste></div>
+      <section
+        class="paste-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="paste-title"
+        tabindex="-1"
+      >
+        <header class="modal-head">
+          <div>
+            <span class="modal-kicker">CREATE KNOWLEDGE</span>
+            <h2 id="paste-title">粘贴一份资料</h2>
+            <p>适合导入会议纪要、临时记录或从其他系统复制的文本。</p>
+          </div>
+          <button class="icon-button" type="button" data-close-paste aria-label="关闭粘贴窗口">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </header>
+        <form id="paste-form" class="paste-form">
+          <label>
+            <span>资料名称</span>
+            <input id="paste-title-input" type="text" maxlength="160" placeholder="例如：9 月门店周会纪要" required>
+          </label>
+          <label>
+            <span>资料内容</span>
+            <textarea id="paste-content-input" rows="12" maxlength="250000" placeholder="粘贴或输入资料文本…" required></textarea>
+          </label>
+          <div class="paste-actions">
+            <span>内容只保存在当前浏览器</span>
+            <button class="primary-button" type="submit">保存到知识库</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-layer" id="preview-modal" hidden>
+      <div class="modal-backdrop" data-close-preview></div>
+      <section
+        class="preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="preview-title"
+        tabindex="-1"
+      >
+        <header class="modal-head">
+          <div>
+            <span class="modal-kicker">KNOWLEDGE PREVIEW</span>
+            <h2 id="preview-title">资料预览</h2>
+            <p id="preview-meta"></p>
+          </div>
+          <button class="icon-button" type="button" data-close-preview aria-label="关闭资料预览">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </header>
+        <div class="preview-content" id="preview-content"></div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script src="/assistant.js" defer></script>
+  </body>
+</html>

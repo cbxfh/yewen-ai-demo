@@ -287,6 +287,36 @@ button:disabled {
   box-shadow: 0 0 0 3px rgba(94, 143, 89, 0.13);
 }
 
+.header-action-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-api-button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 10px 14px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 750;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.header-api-button:hover {
+  color: var(--ink);
+  background: var(--cream);
+  border-color: rgba(27, 39, 32, 0.25);
+}
+
+.header-api-button .icon {
+  width: 15px;
+  height: 15px;
+}
+
 .header-ai-button {
   display: inline-flex;
   gap: 8px;
@@ -309,6 +339,10 @@ button:disabled {
 .header-ai-button .icon {
   width: 15px;
   height: 15px;
+}
+
+.nav-settings-link {
+  display: none;
 }
 
 .menu-toggle {
@@ -3621,5 +3655,268 @@ button:disabled {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Chinese No. 3 reading size: 16pt / approximately 21.33px. */
+body {
+  font-size: 16pt;
+  line-height: 1.72;
+}
+
+.nav-link {
+  font-size: 12pt;
+}
+
+.header-api-button,
+.header-ai-button {
+  font-size: 11.5pt;
+}
+
+.hero-intro,
+.section-heading > p,
+.card-summary,
+.dialog-callout,
+.dialog-section p,
+.dialog-section li,
+.dialog-checklist-items,
+.assistant-copy > p,
+.about-header > p,
+.boundary-note p {
+  font-size: 16pt;
+  line-height: 1.85;
+}
+
+.quick-searches {
+  font-size: 10.5pt;
+}
+
+.quick-searches button {
+  font-size: 10.5pt;
+}
+
+.hero-search input {
+  font-size: 14pt;
+}
+
+.hero-search button,
+.button {
+  font-size: 11.5pt;
+}
+
+.section-kicker {
+  font-size: 10.5pt;
+}
+
+.industry-tab {
+  font-size: 12pt;
+}
+
+.industry-tab span {
+  font-size: 9pt;
+}
+
+.library-search-wrap input {
+  font-size: 13pt;
+}
+
+.type-filter,
+.saved-filter {
+  font-size: 11pt;
+}
+
+.results-meta {
+  font-size: 10.5pt;
+}
+
+.resource-grid {
+  gap: 19px;
+}
+
+.resource-card {
+  min-height: 430px;
+  padding: 26px;
+}
+
+.card-type {
+  font-size: 11pt;
+}
+
+.card-title-button {
+  font-size: 21pt;
+}
+
+.card-summary {
+  margin-top: 13px;
+  margin-bottom: 19px;
+}
+
+.card-tags span {
+  padding: 5px 8px;
+  font-size: 9.5pt;
+}
+
+.card-footer {
+  font-size: 10pt;
+}
+
+.card-footer-action {
+  font-size: 10.5pt;
+}
+
+.resource-skeleton {
+  min-height: 430px;
+}
+
+.resource-dialog {
+  width: min(980px, 100%);
+}
+
+.resource-dialog-scroll {
+  padding-inline: 64px;
+}
+
+.dialog-title-row p {
+  font-size: 14pt;
+}
+
+.dialog-meta strong {
+  font-size: 11pt;
+}
+
+.dialog-meta span,
+.dialog-provenance span {
+  font-size: 9pt;
+}
+
+.dialog-tags span {
+  font-size: 10pt;
+}
+
+.dialog-section h3,
+.dialog-checklist h3 {
+  font-size: 20pt;
+}
+
+.dialog-check-item {
+  font-size: 13pt;
+}
+
+.dialog-provenance p {
+  font-size: 10.5pt;
+}
+
+.resource-dialog-foot > span {
+  font-size: 10pt;
+}
+
+.capability-list strong {
+  font-size: 13pt;
+}
+
+.capability-list p {
+  font-size: 12.5pt;
+}
+
+.about-card {
+  min-height: 355px;
+  padding: 27px;
+}
+
+.about-card h3 {
+  font-size: 22pt;
+}
+
+.about-card p {
+  font-size: 12.5pt;
+}
+
+.about-type {
+  font-size: 9.5pt;
+}
+
+.boundary-note p {
+  font-size: 12.5pt;
+}
+
+.footer-ai-button,
+.floating-assistant {
+  font-size: 11.5pt;
+}
+
+@media (max-width: 1180px) {
+  .resource-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nav-settings-link {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .header-action-group {
+    display: flex;
+  }
+
+  .header-api-button {
+    padding: 8px 11px;
+    font-size: 10.5pt;
+  }
+
+  .main-nav .nav-settings-link {
+    display: block;
+  }
+
+  .hero-intro,
+  .section-heading > p,
+  .card-summary,
+  .dialog-callout,
+  .dialog-section p,
+  .dialog-section li,
+  .assistant-copy > p,
+  .about-header > p {
+    font-size: 16pt;
+  }
+
+  .hero-search input {
+    font-size: 12pt;
+  }
+
+  .resource-card,
+  .resource-skeleton {
+    min-height: 385px;
+  }
+
+  .card-title-button {
+    font-size: 20pt;
+  }
+
+  .resource-dialog-scroll {
+    padding-inline: 20px;
+  }
+
+  .dialog-section h3,
+  .dialog-checklist h3 {
+    font-size: 19pt;
+  }
+
+  .dialog-check-item {
+    font-size: 12pt;
+  }
+
+  .about-card {
+    min-height: 310px;
+  }
+}
+
+@media (max-width: 400px) {
+  .header-api-button {
+    padding: 7px 9px;
+    font-size: 9.5pt;
+  }
+
+  .header-api-button .icon {
+    display: none;
   }
 }

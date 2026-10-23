@@ -2,15 +2,21 @@
 
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { before, after, test } = require('node:test');
 const { createApp } = require('../server');
 const { resources, buildResourceContext } = require('../data/resources');
 
 let server;
 let baseUrl;
+let testConfigPath;
 
 before(async () => {
   process.env.AI_API_KEY = '';
+  testConfigPath = path.join(os.tmpdir(), `industry-ai-toolkit-test-${process.pid}.json`);
+  process.env.AI_CONFIG_PATH = testConfigPath;
   server = createApp();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
@@ -18,6 +24,7 @@ before(async () => {
 });
 
 after(async () => {
+  if (testConfigPath && fs.existsSync(testConfigPath)) fs.unlinkSync(testConfigPath);
   if (!server) return;
   await new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
@@ -74,6 +81,16 @@ test('index page includes security headers and primary content', async () => {
   assert.match(html, /AI/);
 });
 
+test('dedicated assistant page exposes API settings and personal knowledge import', async () => {
+  const response = await fetch(`${baseUrl}/assistant`);
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /AI 助手与个人知识库/);
+  assert.match(html, /API 设置/);
+  assert.match(html, /个人知识库/);
+  assert.match(html, /TXT · MD · CSV · JSON · HTML/);
+});
+
 test('static server does not expose files outside public directory', async () => {
   const response = await fetch(`${baseUrl}/..%2Fserver.js`);
   assert.equal(response.status, 404);
@@ -103,6 +120,84 @@ test('chat endpoint explains that AI is not configured when no key is present', 
   assert.equal(response.status, 503);
   const payload = await response.json();
   assert.equal(payload.code, 'AI_NOT_CONFIGURED');
+});
+
+test('local API settings can be saved, read without the key, and cleared', async () => {
+  process.env.AI_API_KEY = '';
+  process.env.AI_BASE_URL = '';
+  process.env.AI_MODEL = '';
+  const saveResponse = await fetch(`${baseUrl}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      baseUrl: 'https://api.example.test/v1',
+      model: 'mock-config-model',
+      apiKey: 'local-test-secret',
+      maxTokens: 900
+    })
+  });
+  assert.equal(saveResponse.status, 200);
+  const saved = await saveResponse.json();
+  assert.equal(saved.saved, true);
+  assert.equal(saved.aiConfigured, true);
+  assert.equal(saved.model, 'mock-config-model');
+  assert.equal(JSON.stringify(saved).includes('local-test-secret'), false);
+
+  const getResponse = await fetch(`${baseUrl}/api/config`);
+  assert.equal(getResponse.status, 200);
+  const localConfig = await getResponse.json();
+  assert.equal(localConfig.baseUrl, 'https://api.example.test/v1');
+  assert.equal(localConfig.model, 'mock-config-model');
+  assert.equal(localConfig.hasApiKey, true);
+  assert.equal(Object.prototype.hasOwnProperty.call(localConfig, 'apiKey'), false);
+
+  const clearResponse = await fetch(`${baseUrl}/api/config`, { method: 'DELETE' });
+  assert.equal(clearResponse.status, 200);
+  const cleared = await clearResponse.json();
+  assert.equal(cleared.cleared, true);
+  assert.equal(cleared.aiConfigured, false);
+});
+
+test('API settings reject insecure non-local plain HTTP endpoints', async () => {
+  const response = await fetch(`${baseUrl}/api/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      baseUrl: 'http://insecure.example.test/v1',
+      model: 'model',
+      apiKey: 'secret'
+    })
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).code, 'INSECURE_BASE_URL');
+});
+
+test('API settings refuse non-local host headers', async () => {
+  const port = server.address().port;
+  const result = await new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        hostname: '127.0.0.1',
+        port,
+        path: '/api/config',
+        headers: { Host: 'public.example.test' }
+      },
+      (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => {
+          resolve({
+            status: response.statusCode,
+            body: JSON.parse(Buffer.concat(chunks).toString('utf8'))
+          });
+        });
+      }
+    );
+    request.on('error', reject);
+    request.end();
+  });
+  assert.equal(result.status, 403);
+  assert.equal(result.body.code, 'LOCAL_CONFIG_ONLY');
 });
 
 test('chat endpoint proxies a configured OpenAI-compatible provider request', async () => {
@@ -142,7 +237,13 @@ test('chat endpoint proxies a configured OpenAI-compatible provider request', as
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [{ role: 'user', content: '请给我三个日检重点。' }],
-        industry: 'food'
+        industry: 'food',
+        knowledge: [
+          {
+            name: '门店周会纪要.txt',
+            content: '本周发现晚高峰冷柜温度记录存在两次缺漏，由值班经理负责补齐复核。'
+          }
+        ]
       })
     });
     assert.equal(response.status, 200);
@@ -153,6 +254,17 @@ test('chat endpoint proxies a configured OpenAI-compatible provider request', as
     assert.equal(received.body.model, 'mock-model');
     assert.match(received.body.messages[0].content, /站内资料/);
     assert.match(received.body.messages[0].content, /餐饮门店食品安全日检清单/);
+    assert.match(received.body.messages[0].content, /用户导入的个人知识库/);
+    assert.match(received.body.messages[0].content, /门店周会纪要\.txt/);
+
+    const testResponse = await fetch(`${baseUrl}/api/config/test`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' }
+    });
+    assert.equal(testResponse.status, 200);
+    const testPayload = await testResponse.json();
+    assert.equal(testPayload.connected, true);
+    assert.equal(testPayload.reply, '这是来自模拟供应商的测试回答。');
   } finally {
     process.env.AI_API_KEY = previous.key ?? '';
     process.env.AI_BASE_URL = previous.base ?? '';

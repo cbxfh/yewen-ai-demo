@@ -961,7 +961,7 @@
     const sectionMap = {
       home: 'a[href="#home"]',
       library: 'a[href="#library"]',
-      assistant: 'button[data-open-assistant]',
+      assistant: 'a[href="/assistant.html"]',
       about: 'a[href="#about"]'
     };
     const links = [...document.querySelectorAll('.main-nav .nav-link')];

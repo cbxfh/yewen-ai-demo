@@ -28,6 +28,11 @@
         <path d="m12 3-1.6 5.4L5 10l5.4 1.6L12 17l1.6-5.4L19 10l-5.4-1.6L12 3Z"></path>
         <path d="m5 17 .7 2.3L8 20l-2.3.7L5 23l-.7-2.3L2 20l2.3-.7L5 17Z"></path>
       </symbol>
+      <symbol id="icon-settings" viewBox="0 0 24 24">
+        <path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path>
+        <circle cx="16" cy="7" r="2"></circle>
+        <circle cx="8" cy="17" r="2"></circle>
+      </symbol>
       <symbol id="icon-bookmark" viewBox="0 0 24 24">
         <path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-4-6 4V4.8Z"></path>
       </symbol>
@@ -79,17 +84,24 @@
         <nav class="main-nav" id="main-nav" aria-label="主导航">
           <a href="#home" class="nav-link active">首页</a>
           <a href="#library" class="nav-link">资料库</a>
-          <button class="nav-link nav-ai-button" type="button" data-open-assistant>
+          <a href="/assistant.html" class="nav-link nav-ai-button">
             AI 对话
             <span class="nav-status" id="nav-status" aria-label="AI 状态加载中"></span>
-          </button>
-          <a href="#about" class="nav-link">关于第一版</a>
+          </a>
+          <a href="/assistant.html?settings=1" class="nav-link nav-settings-link">API 设置</a>
+          <a href="#about" class="nav-link">关于这个版本</a>
         </nav>
 
-        <button class="header-ai-button" type="button" data-open-assistant>
-          <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
-          问问 AI
-        </button>
+        <div class="header-action-group">
+          <a class="header-api-button" href="/assistant.html?settings=1">
+            <svg class="icon" aria-hidden="true"><use href="#icon-settings"></use></svg>
+            API 设置
+          </a>
+          <a class="header-ai-button" href="/assistant.html">
+            <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
+            问问 AI
+          </a>
+        </div>
         <button
           class="menu-toggle"
           type="button"
@@ -111,7 +123,7 @@
             <div class="eyebrow">
               <span class="eyebrow-dot"></span>
               双行业知识中枢
-              <span class="version-pill">FIRST EDITION</span>
+              <span class="version-pill">EDITION 02</span>
             </div>
             <h1>
               把门店经验，<br>
@@ -150,12 +162,12 @@
                 浏览资料库
                 <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg>
               </a>
-              <button class="button button-text" type="button" data-open-assistant>
+              <a class="button button-text" href="/assistant.html">
                 <span class="button-text-icon">
                   <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
                 </span>
                 和行业助理聊聊
-              </button>
+              </a>
             </div>
           </div>
 
@@ -386,10 +398,10 @@
               </div>
             </li>
           </ul>
-          <button class="button button-light" type="button" data-open-assistant>
+          <a class="button button-light" href="/assistant.html">
             打开 AI 助理
             <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg>
-          </button>
+          </a>
           <div class="api-status-inline">
             <span class="status-light" id="api-status-light"></span>
             <span id="api-status-copy">正在检查 AI 接入状态…</span>
@@ -403,10 +415,10 @@
             <span>03</span>
             ABOUT THIS EDITION
           </div>
-          <h2>这是第一版，<br><span class="serif-accent">先把骨架搭对。</span></h2>
+          <h2>这是第二版，<br><span class="serif-accent">把工具真正用起来。</span></h2>
           <p>
-            当前版本重点验证内容结构、检索体验和 API 对话链路。
-            专业内容已明确标记为示例基线，后续可替换为你的正式资料。
+            新增独立 AI 工作台、可视化 API 接入和个人知识库，
+            同时也把阅读字号提升到中文三号。专业内容仍标记为待复核的示例基线。
           </p>
         </div>
         <div class="about-grid">
@@ -431,9 +443,9 @@
           <article class="about-card about-card-cream">
             <span class="about-index">C</span>
             <div>
-              <span class="about-type">可配置</span>
-              <h3>OpenAI 兼容 API</h3>
-              <p>通过环境变量接入兼容 Chat Completions 的服务，首版不绑定单一供应商。</p>
+              <span class="about-type">已包含</span>
+              <h3>API 与个人知识库</h3>
+              <p>在本机页面配置 API，导入自己的资料，让 AI 结合摘录内容回答。</p>
             </div>
             <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
           </article>
@@ -442,7 +454,7 @@
             <div>
               <span class="about-type">下一阶段</span>
               <h3>把示例换成正式资产</h3>
-              <p>待确定资料授权、品牌名称、账号体系和正式上线环境。</p>
+              <p>待确定正式资料授权、品牌、账号体系和团队协作方式。</p>
             </div>
             <span class="about-arrow">
               <svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg>
@@ -472,22 +484,22 @@
           </span>
         </a>
         <p>把专业判断，变成团队每天都能执行的下一步。</p>
-        <button class="footer-ai-button" type="button" data-open-assistant>
+        <a class="footer-ai-button" href="/assistant.html">
           <svg class="icon" aria-hidden="true"><use href="#icon-spark"></use></svg>
           问问 AI
-        </button>
+        </a>
       </div>
       <div class="footer-bottom">
-        <span>© 2026 INDUSTRY AI TOOLKIT · FIRST EDITION</span>
+        <span>© 2026 INDUSTRY AI TOOLKIT · EDITION 02</span>
         <span>内容示例 · 待正式复核</span>
       </div>
     </footer>
 
-    <button class="floating-assistant" type="button" data-open-assistant aria-label="打开 AI 行业助理">
+    <a class="floating-assistant" href="/assistant.html" aria-label="打开 AI 行业助理">
       <span class="floating-pulse"></span>
       <svg class="icon" aria-hidden="true"><use href="#icon-message"></use></svg>
       <span>AI 助理</span>
-    </button>
+    </a>
 
     <div class="resource-modal" id="resource-modal" hidden>
       <div class="modal-backdrop" data-close-resource></div>
@@ -530,7 +542,7 @@
           <div class="dialog-provenance">
             <span>资料状态</span>
             <p>
-              平台原创管理示例，供第一版产品验证使用。上线前需由你的专业团队按实际流程与所在地规范复核。
+              平台原创管理示例，供当前版本产品验证使用。上线前需由你的专业团队按实际流程与所在地规范复核。
             </p>
           </div>
         </div>
