@@ -2,6 +2,7 @@
 
 const http = require('node:http');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { URL } = require('node:url');
 const { industries, getResources, buildResourceContext } = require('./data/resources');
@@ -27,10 +28,15 @@ const MIME_TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml; charset=utf-8',
-  '.webp': 'image/webp'
+  '.webp': 'image/webp',
+  '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
 const rateBuckets = new Map();
+const publicUsage = {
+  day: '',
+  count: 0
+};
 
 function loadLocalEnv() {
   const envFile = path.join(ROOT, '.env');
@@ -69,6 +75,10 @@ function securityHeaders(contentType = '') {
 }
 
 function getClientIp(req) {
+  if (process.env.TRUST_PROXY === '1') {
+    const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwardedFor) return forwardedFor;
+  }
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -325,6 +335,22 @@ function clampInteger(value, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function consumePublicDailyQuota() {
+  const limit = clampInteger(process.env.PUBLIC_DAILY_REQUEST_LIMIT, 0, 0, 100000);
+  if (!limit) return { allowed: true, remaining: null };
+
+  const day = new Date().toISOString().slice(0, 10);
+  if (publicUsage.day !== day) {
+    publicUsage.day = day;
+    publicUsage.count = 0;
+  }
+  if (publicUsage.count >= limit) {
+    return { allowed: false, remaining: 0 };
+  }
+  publicUsage.count += 1;
+  return { allowed: true, remaining: limit - publicUsage.count };
+}
+
 function validateKnowledge(input) {
   if (input == null) return [];
   if (!Array.isArray(input)) {
@@ -536,6 +562,14 @@ async function handleChat(req, res) {
     const messages = validateMessages(body.messages);
     const knowledge = validateKnowledge(body.knowledge);
     const industry = ['all', 'food', 'beauty'].includes(body.industry) ? body.industry : 'all';
+    const dailyQuota = consumePublicDailyQuota();
+    if (!dailyQuota.allowed) {
+      json(res, 429, {
+        error: '今日公开 AI 使用额度已用完，请明天再试。',
+        code: 'DAILY_LIMIT_REACHED'
+      });
+      return;
+    }
     const result = await requestChatCompletion({ messages, industry, knowledge });
     json(res, 200, result);
   } catch (error) {
@@ -757,6 +791,15 @@ if (require.main === module) {
   app.listen(port, host, () => {
     const config = getAiConfig();
     console.log(`行业 AI 工具包已启动：http://${host}:${port}`);
+    if (host === '0.0.0.0') {
+      const addresses = Object.values(os.networkInterfaces())
+        .flat()
+        .filter((address) => address && address.family === 'IPv4' && !address.internal)
+        .map((address) => address.address);
+      addresses.forEach((address) => {
+        console.log(`同一 Wi-Fi 手机访问：http://${address}:${port}`);
+      });
+    }
     console.log(
       config.configured
         ? `AI 对话已配置：${config.model}`

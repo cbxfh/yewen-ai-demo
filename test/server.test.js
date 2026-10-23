@@ -89,6 +89,17 @@ test('dedicated assistant page exposes API settings and personal knowledge impor
   assert.match(html, /API 设置/);
   assert.match(html, /个人知识库/);
   assert.match(html, /TXT · MD · CSV · JSON · HTML/);
+  assert.match(html, /manifest\.webmanifest/);
+  assert.match(html, /name="viewport"/);
+});
+
+test('mobile web manifest is served with the correct content type', async () => {
+  const response = await fetch(`${baseUrl}/manifest.webmanifest`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /application\/manifest\+json/);
+  const manifest = await response.json();
+  assert.equal(manifest.display, 'standalone');
+  assert.equal(manifest.start_url, '/');
 });
 
 test('static server does not expose files outside public directory', async () => {

@@ -28,6 +28,7 @@
 html,
 body {
   height: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -291,6 +292,7 @@ button:disabled {
 .workspace-layout {
   display: grid;
   height: calc(100vh - 82px);
+  height: calc(100dvh - 82px);
   min-height: 0;
   grid-template-columns: minmax(350px, 390px) minmax(0, 1fr);
 }
@@ -1221,7 +1223,7 @@ button:disabled {
 .workspace-composer {
   position: relative;
   display: flex;
-  padding: 17px clamp(24px, 5vw, 80px) 13px;
+  padding: 17px clamp(24px, 5vw, 80px) max(13px, env(safe-area-inset-bottom));
   flex-direction: column;
   background: rgba(251, 248, 241, 0.96);
   border-top: 1px solid var(--line);
@@ -1686,6 +1688,7 @@ button:disabled {
 
   .chat-workspace {
     height: calc(100vh - 82px);
+    height: calc(100dvh - 82px);
   }
 
   .chat-topbar {
@@ -1761,10 +1764,12 @@ button:disabled {
 
   .workspace-layout {
     height: calc(100vh - 72px);
+    height: calc(100dvh - 72px);
   }
 
   .chat-workspace {
     height: calc(100vh - 72px);
+    height: calc(100dvh - 72px);
   }
 
   .chat-topbar {
@@ -1864,7 +1869,7 @@ button:disabled {
   }
 
   .workspace-composer {
-    padding: 12px 12px 9px;
+    padding: 12px 12px max(9px, env(safe-area-inset-bottom));
   }
 
   .workspace-composer textarea {
@@ -1886,6 +1891,33 @@ button:disabled {
 
   .composer-help span:last-child {
     display: none;
+  }
+
+  .knowledge-search input,
+  .settings-form input,
+  .paste-form input,
+  .paste-form textarea {
+    font-size: 16px;
+  }
+
+  .document-check {
+    width: 28px;
+    height: 28px;
+  }
+
+  .document-tool {
+    width: 38px;
+    height: 38px;
+  }
+
+  .document-tool .icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  .knowledge-item {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    padding: 12px 9px;
   }
 
   .modal-layer {

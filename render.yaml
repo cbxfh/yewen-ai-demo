@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: industry-ai-toolkit
+    runtime: docker
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: "1"
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: AI_MAX_TOKENS
+        value: "1200"
+      - key: PUBLIC_DAILY_REQUEST_LIMIT
+        value: "300"

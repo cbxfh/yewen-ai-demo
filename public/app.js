@@ -18,6 +18,7 @@
     chatLoading: false,
     aiConfigured: false,
     aiModel: '',
+    localConfigAllowed: false,
     toastTimer: null
   };
 
@@ -127,11 +128,20 @@
       const payload = await response.json();
       state.aiConfigured = Boolean(payload.aiConfigured);
       state.aiModel = typeof payload.model === 'string' ? payload.model : '';
+      state.localConfigAllowed = Boolean(payload.localConfigAllowed);
     } catch {
       state.aiConfigured = false;
       state.aiModel = '';
+      state.localConfigAllowed = false;
     }
+    syncLocalConfigVisibility();
     setAssistantStatus(state.aiConfigured ? 'ready' : 'offline');
+  }
+
+  function syncLocalConfigVisibility() {
+    document.querySelectorAll('.header-api-button, .nav-settings-link').forEach((link) => {
+      link.hidden = !state.localConfigAllowed;
+    });
   }
 
   function setAssistantStatus(status) {

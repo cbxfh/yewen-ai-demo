@@ -215,6 +215,11 @@
     elements.settingsStatusCopy.textContent = configured
       ? `${status.model || '已配置模型'}${status.apiHost ? ` · ${status.apiHost}` : ''} · ${sourceText}`
       : '填写 API 地址、模型和密钥后即可启用对话。';
+    const apiSetupStep = elements.welcomeApiConfig.closest('.setup-step');
+    const importSetupStep = elements.welcomeImport.closest('.setup-step');
+    elements.openApiSettings.hidden = !state.localConfigAllowed;
+    apiSetupStep.hidden = !state.localConfigAllowed;
+    importSetupStep.querySelector(':scope > span').textContent = state.localConfigAllowed ? '02' : '01';
 
     elements.chatConfigNotice.hidden = configured;
     elements.chatInput.disabled = !configured || state.chatLoading;
@@ -222,6 +227,19 @@
     elements.chatInput.placeholder = configured
       ? '输入一个门店问题，或让 AI 分析你选中的资料…'
       : '请先完成 API 设置';
+
+    if (!configured && !state.localConfigAllowed) {
+      elements.chatConfigNotice.querySelector('strong').textContent = 'AI 服务暂时不可用';
+      elements.chatConfigNotice.querySelector('span').textContent =
+        '站点服务端尚未配置 AI 服务，请联系站点管理员。';
+      elements.noticeApiConfig.hidden = true;
+      elements.chatInput.placeholder = 'AI 服务暂时不可用';
+    } else {
+      elements.chatConfigNotice.querySelector('strong').textContent = '还差一步就能开始对话';
+      elements.chatConfigNotice.querySelector('span').textContent =
+        '完成 API 设置后，AI 助手即可结合你的知识库回答问题。';
+      elements.noticeApiConfig.hidden = false;
+    }
   }
 
   async function openSettings() {
@@ -924,6 +942,7 @@
       AI_TIMEOUT: 'AI 服务响应超时，请稍后重试。',
       AI_UPSTREAM_UNREACHABLE: '无法连接 AI 服务，请检查 API 地址和网络。',
       RATE_LIMITED: '请求过于频繁，请等待一分钟后再试。',
+      DAILY_LIMIT_REACHED: '今日公开 AI 使用额度已用完，请明天再试。',
       CONVERSATION_TOO_LONG: '当前对话较长，请清空对话后重新开始。',
       KNOWLEDGE_TOO_LONG: '选中的个人资料过长，请减少资料或缩短内容。'
     };

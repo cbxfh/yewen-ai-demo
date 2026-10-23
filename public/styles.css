@@ -364,6 +364,7 @@ button:disabled {
   position: relative;
   max-width: 1600px;
   min-height: 100vh;
+  min-height: 100svh;
   margin: 0 auto;
   padding: 142px 44px 30px;
   overflow: hidden;
