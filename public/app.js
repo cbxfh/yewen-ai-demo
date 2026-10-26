@@ -3,9 +3,11 @@
 (() => {
   const state = {
     industries: [],
+    topics: [],
     resources: [],
     resourcesLoaded: false,
     industry: 'all',
+    topic: 'all',
     type: 'all',
     query: '',
     savedOnly: false,
@@ -35,6 +37,7 @@
     resultsSummary: document.getElementById('results-summary'),
     resetFilters: document.getElementById('reset-filters'),
     savedFilter: document.getElementById('saved-filter'),
+    topicFilterRow: document.getElementById('topic-filter-row'),
     savedCount: document.getElementById('saved-count'),
     resourceModal: document.getElementById('resource-modal'),
     resourceDialog: document.querySelector('.resource-dialog'),
@@ -89,6 +92,7 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       state.industries = Array.isArray(payload.industries) ? payload.industries : [];
+      state.topics = Array.isArray(payload.topics) ? payload.topics : [];
       state.resources = Array.isArray(payload.resources) ? payload.resources : [];
       state.resourcesLoaded = true;
 
@@ -200,6 +204,10 @@
     const query = state.query.trim().toLowerCase();
     return state.resources.filter((resource) => {
       const matchesIndustry = state.industry === 'all' || resource.industry === state.industry;
+      const matchesTopic =
+        state.topic === 'all' ||
+        resource.topicId === state.topic ||
+        state.industry !== 'growth';
       const matchesResourceType = matchesType(resource, state.type);
       const matchesSaved = !state.savedOnly || state.savedIds.has(resource.id);
       const haystack = [
@@ -215,6 +223,7 @@
         .toLowerCase();
       return (
         matchesIndustry &&
+        matchesTopic &&
         matchesResourceType &&
         matchesSaved &&
         (!query || haystack.includes(query))
@@ -316,10 +325,29 @@
   function setIndustry(industry) {
     if (industry !== 'all' && !state.industries.some((item) => item.id === industry)) return;
     state.industry = industry;
+    state.topic = 'all';
+    elements.topicFilterRow.hidden = industry !== 'growth';
     document.querySelectorAll('.industry-tab').forEach((button) => {
       const active = button.dataset.industry === industry;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.topic-filter').forEach((button) => {
+      button.classList.toggle('active', button.dataset.topic === 'all');
+    });
+    renderResources();
+  }
+
+  function setTopic(topic) {
+    if (
+      topic !== 'all' &&
+      !state.topics.some((item) => item.id === topic)
+    ) {
+      return;
+    }
+    state.topic = topic;
+    document.querySelectorAll('.topic-filter').forEach((button) => {
+      button.classList.toggle('active', button.dataset.topic === topic);
     });
     renderResources();
   }
@@ -866,6 +894,11 @@
     document.querySelector('.type-filters').addEventListener('click', (event) => {
       const button = event.target.closest('[data-type]');
       if (button) setType(button.dataset.type);
+    });
+
+    document.querySelector('.topic-filters').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-topic]');
+      if (button) setTopic(button.dataset.topic);
     });
 
     elements.librarySearchInput.addEventListener('input', () => {
