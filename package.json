@@ -1,6 +1,6 @@
 {
   "name": "industry-ai-toolkit",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "description": "业问 AI 行业资料库、个人知识库与独立 AI 助手",
   "main": "server.js",

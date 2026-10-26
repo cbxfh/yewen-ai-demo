@@ -33,6 +33,7 @@ const RATE_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT = 10;
 const VALID_INDUSTRY_IDS = new Set(['all', ...industries.map((industry) => industry.id)]);
 const VALID_TOPIC_IDS = new Set(['all', ...Object.keys(topicNames)]);
+const FEEDBACK_CATEGORIES = ['功能建议', '问题反馈', '内容纠错', '其他'];
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -885,6 +886,68 @@ function handleAdminStats(req, res) {
   }
 }
 
+function handleAdminFeedback(req, res, requestUrl) {
+  const admin = requireAuthenticatedAdmin(req, res);
+  if (!admin) return;
+  try {
+    const limitParam = requestUrl.searchParams.get('limit');
+    const offsetParam = requestUrl.searchParams.get('offset');
+    const rawLimit = limitParam === null ? 100 : Number(limitParam);
+    const rawOffset = offsetParam === null ? 0 : Number(offsetParam);
+    const limit = Number.isInteger(rawLimit)
+      ? Math.min(200, Math.max(1, rawLimit))
+      : 100;
+    const offset = Number.isInteger(rawOffset) ? Math.max(0, rawOffset) : 0;
+    const status = requestUrl.searchParams.get('status') || 'all';
+    const category = requestUrl.searchParams.get('category') || 'all';
+    if (!['all', 'unread', 'read'].includes(status)) {
+      json(res, 400, { error: '意见状态筛选无效', code: 'INVALID_FEEDBACK_STATUS' });
+      return;
+    }
+    if (category !== 'all' && !FEEDBACK_CATEGORIES.includes(category)) {
+      json(res, 400, { error: '意见分类筛选无效', code: 'INVALID_FEEDBACK_CATEGORY' });
+      return;
+    }
+    json(res, 200, {
+      admin,
+      ...getUserStore().getFeedbackList({ limit, offset, status, category })
+    });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
+async function handleAdminFeedbackRead(req, res) {
+  const admin = requireAuthenticatedAdmin(req, res);
+  if (!admin) return;
+  try {
+    const body = await readJsonBody(req);
+    if (body.all === true) {
+      const result = getUserStore().markAllFeedbackRead();
+      json(res, 200, {
+        admin,
+        updated: result.updated,
+        unreadCount: result.unreadCount
+      });
+      return;
+    }
+
+    const feedbackId = String(body.id || '').trim();
+    if (!feedbackId) {
+      json(res, 400, { error: '缺少意见编号', code: 'INVALID_FEEDBACK_ID' });
+      return;
+    }
+    const item = getUserStore().markFeedbackRead(feedbackId, body.read !== false);
+    if (!item) {
+      json(res, 404, { error: '意见不存在', code: 'FEEDBACK_NOT_FOUND' });
+      return;
+    }
+    json(res, 200, { admin, item });
+  } catch (error) {
+    sendAuthError(res, error);
+  }
+}
+
 function getFeedbackConfig() {
   const email = String(process.env.FEEDBACK_EMAIL || '').trim();
   const customUrl = String(process.env.FEEDBACK_SUBMIT_URL || '').trim();
@@ -921,7 +984,7 @@ async function handleFeedback(req, res) {
     const category = String(body.category || '其他').trim();
     const message = String(body.message || '').trim();
     const page = String(body.page || '/assistant.html').trim();
-    if (!['功能建议', '问题反馈', '内容纠错', '其他'].includes(category)) {
+    if (!FEEDBACK_CATEGORIES.includes(category)) {
       throw Object.assign(new Error('意见分类无效'), { status: 400, code: 'INVALID_FEEDBACK_CATEGORY' });
     }
     if (message.length < 5 || message.length > 2000) {
@@ -1267,6 +1330,16 @@ function createApp() {
 
       if (pathname === '/api/admin/logout' && req.method === 'POST') {
         handleAdminLogout(req, res);
+        return;
+      }
+
+      if (pathname === '/api/admin/feedback' && req.method === 'GET') {
+        handleAdminFeedback(req, res, requestUrl);
+        return;
+      }
+
+      if (pathname === '/api/admin/feedback/read' && req.method === 'POST') {
+        await handleAdminFeedbackRead(req, res);
         return;
       }
 

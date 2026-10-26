@@ -7,7 +7,18 @@
     setupAllowed: false,
     admin: null,
     stats: null,
+    feedback: {
+      items: [],
+      total: 0,
+      totalAll: 0,
+      unreadCount: 0,
+      status: 'all',
+      category: 'all',
+      loaded: false,
+      loading: false
+    },
     refreshTimer: null,
+    refreshTick: 0,
     loadingStats: false,
     toastTimer: null
   };
@@ -38,6 +49,14 @@
     totalDocuments: document.getElementById('total-documents'),
     totalMessages: document.getElementById('total-messages'),
     aiRequestsToday: document.getElementById('ai-requests-today'),
+    totalFeedback: document.getElementById('total-feedback'),
+    unreadFeedback: document.getElementById('unread-feedback'),
+    feedbackUnreadCount: document.getElementById('feedback-unread-count'),
+    feedbackCategoryFilter: document.getElementById('feedback-category-filter'),
+    markAllFeedbackRead: document.getElementById('mark-all-feedback-read'),
+    feedbackList: document.getElementById('feedback-list'),
+    feedbackEmpty: document.getElementById('feedback-empty'),
+    loadMoreFeedback: document.getElementById('load-more-feedback'),
     trendChart: document.getElementById('trend-chart'),
     trendTotal: document.getElementById('trend-total'),
     userSearch: document.getElementById('user-search'),
@@ -87,10 +106,32 @@
       input.addEventListener('input', hideError);
     });
     elements.logout.addEventListener('click', logout);
-    elements.refresh.addEventListener('click', () => loadStats({ manual: true }));
+    elements.refresh.addEventListener('click', () => {
+      loadStats({ manual: true });
+      loadFeedback({ reset: true, quiet: true });
+    });
     elements.userSearch.addEventListener('input', renderUserTable);
+    document.querySelectorAll('[data-feedback-status]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.feedback.status = button.dataset.feedbackStatus;
+        document.querySelectorAll('[data-feedback-status]').forEach((candidate) => {
+          candidate.classList.toggle('active', candidate === button);
+        });
+        loadFeedback({ reset: true });
+      });
+    });
+    elements.feedbackCategoryFilter.addEventListener('change', () => {
+      state.feedback.category = elements.feedbackCategoryFilter.value;
+      loadFeedback({ reset: true });
+    });
+    elements.markAllFeedbackRead.addEventListener('click', markAllFeedbackRead);
+    elements.loadMoreFeedback.addEventListener('click', () => loadFeedback());
+    elements.feedbackList.addEventListener('toggle', handleFeedbackToggle, true);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && state.admin) loadStats();
+      if (!document.hidden && state.admin) {
+        loadStats();
+        loadFeedback({ reset: true, quiet: true });
+      }
     });
   }
 
@@ -203,6 +244,7 @@
     elements.adminName.textContent = admin.username;
     document.title = `实时后台｜${admin.username}`;
     loadStats();
+    loadFeedback({ reset: true });
     startRefresh();
   }
 
@@ -226,6 +268,13 @@
       if (!response.ok) throw new Error(payload.error || '数据加载失败');
       state.stats = payload;
       renderDashboard();
+      if (
+        state.feedback.loaded &&
+        Number(payload.unreadFeedback) !== state.feedback.unreadCount &&
+        !state.feedback.loading
+      ) {
+        loadFeedback({ reset: true, quiet: true });
+      }
     } catch (error) {
       showToast(error.message);
     } finally {
@@ -243,6 +292,8 @@
     elements.totalDocuments.textContent = formatNumber(stats.totalDocuments);
     elements.totalMessages.textContent = formatNumber(stats.totalMessages);
     elements.aiRequestsToday.textContent = formatNumber(stats.aiRequestsToday);
+    elements.totalFeedback.textContent = formatNumber(stats.feedbackTotal);
+    elements.unreadFeedback.textContent = formatNumber(stats.unreadFeedback);
     elements.lastUpdated.textContent = formatTime(stats.generatedAt);
     renderTrend(stats.recentRegistrations || []);
     renderUserTable();
@@ -272,6 +323,286 @@
       wrapper.append(count, barWrap, date);
       elements.trendChart.append(wrapper);
     });
+  }
+
+  async function loadFeedback({ reset = false, quiet = false } = {}) {
+    if (state.feedback.loading) return;
+    state.feedback.loading = true;
+    elements.loadMoreFeedback.disabled = true;
+    const offset = reset ? 0 : state.feedback.items.length;
+    const params = new URLSearchParams({
+      limit: '100',
+      offset: String(offset),
+      status: state.feedback.status,
+      category: state.feedback.category
+    });
+
+    try {
+      const response = await fetch(`/api/admin/feedback?${params}`, {
+        headers: { Accept: 'application/json' }
+      });
+      if (response.status === 401) {
+        expireAdminSession();
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || '意见信箱加载失败');
+
+      const incoming = Array.isArray(payload.items) ? payload.items : [];
+      if (reset) {
+        state.feedback.items = incoming;
+      } else {
+        const knownIds = new Set(state.feedback.items.map((item) => item.id));
+        state.feedback.items.push(...incoming.filter((item) => !knownIds.has(item.id)));
+      }
+      state.feedback.total = Number(payload.total) || 0;
+      state.feedback.totalAll = Number(payload.totalAll) || 0;
+      state.feedback.unreadCount = Number(payload.unreadCount) || 0;
+      state.feedback.loaded = true;
+      renderFeedbackList();
+    } catch (error) {
+      if (!quiet) showToast(error.message);
+    } finally {
+      state.feedback.loading = false;
+      elements.loadMoreFeedback.disabled = false;
+    }
+  }
+
+  function renderFeedbackList() {
+    elements.feedbackList.replaceChildren();
+    document.querySelectorAll('[data-feedback-status]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.feedbackStatus === state.feedback.status);
+    });
+    elements.feedbackCategoryFilter.value = state.feedback.category;
+    updateFeedbackCounters();
+    elements.feedbackEmpty.hidden = state.feedback.items.length > 0;
+    elements.feedbackEmpty.querySelector('strong').textContent = state.feedback.totalAll
+      ? '没有符合条件的意见'
+      : '信箱还是空的';
+    elements.feedbackEmpty.querySelector('p').textContent = state.feedback.totalAll
+      ? '可以切换状态或意见类型查看其他内容。'
+      : '用户通过 AI 助手页面提交意见后，会实时出现在这里。';
+    elements.loadMoreFeedback.hidden =
+      state.feedback.items.length >= state.feedback.total || state.feedback.total === 0;
+    const remaining = Math.max(0, state.feedback.total - state.feedback.items.length);
+    elements.loadMoreFeedback.textContent = `加载更早的意见（还有 ${remaining} 条）`;
+
+    const fragment = document.createDocumentFragment();
+    state.feedback.items.forEach((item) => {
+      const details = document.createElement('details');
+      details.className = `feedback-item ${item.readAt ? 'is-read' : 'is-unread'}`;
+      details.dataset.feedbackId = item.id;
+
+      const summary = document.createElement('summary');
+      const unreadDot = document.createElement('span');
+      unreadDot.className = 'feedback-unread-dot';
+      unreadDot.setAttribute('aria-label', item.readAt ? '已读' : '未读');
+
+      const summaryContent = document.createElement('div');
+      summaryContent.className = 'feedback-summary-content';
+      const summaryTop = document.createElement('div');
+      summaryTop.className = 'feedback-summary-top';
+      const category = document.createElement('span');
+      category.className = `feedback-category feedback-category-${getCategoryKey(item.category)}`;
+      category.textContent = item.category || '其他';
+      const username = document.createElement('strong');
+      username.textContent = item.username || '未知账号';
+      const submittedAt = document.createElement('span');
+      submittedAt.className = 'feedback-item-time';
+      submittedAt.textContent = formatDate(item.createdAt, true);
+      summaryTop.append(category, username, submittedAt);
+      const summaryNote = document.createElement('p');
+      summaryNote.textContent = `${item.page || '/assistant.html'} · ${
+        item.readAt ? '已读' : '未读'
+      }`;
+      summaryContent.append(summaryTop, summaryNote);
+
+      const summarySide = document.createElement('div');
+      summarySide.className = 'feedback-summary-side';
+      const delivery = getDeliveryInfo(item.delivery);
+      const deliveryBadge = document.createElement('span');
+      deliveryBadge.className = `delivery-badge delivery-${delivery.key}`;
+      deliveryBadge.textContent = delivery.label;
+      const expand = document.createElement('span');
+      expand.className = 'feedback-expand';
+      expand.textContent = '展开';
+      summarySide.append(deliveryBadge, expand);
+      summary.append(unreadDot, summaryContent, summarySide);
+
+      const body = document.createElement('div');
+      body.className = 'feedback-body';
+      const message = document.createElement('p');
+      message.className = 'feedback-message';
+      message.textContent = item.message;
+      const meta = document.createElement('div');
+      meta.className = 'feedback-meta';
+      const rows = [
+        ['提交账号', item.username || '未知账号'],
+        ['账号编号', item.userId || '—'],
+        ['提交页面', item.page || '/assistant.html'],
+        ['提交时间', formatDate(item.createdAt, true)],
+        ['邮件状态', delivery.description],
+        ...(item.deliveredAt ? [['邮件状态更新时间', formatDate(item.deliveredAt, true)]] : [])
+      ];
+      rows.forEach(([label, value]) => {
+        const row = document.createElement('div');
+        const term = document.createElement('span');
+        term.textContent = label;
+        const detail = document.createElement('strong');
+        detail.textContent = value;
+        row.append(term, detail);
+        meta.append(row);
+      });
+      const idRow = document.createElement('div');
+      const idLabel = document.createElement('span');
+      idLabel.textContent = '意见编号';
+      const idValue = document.createElement('code');
+      idValue.textContent = item.id;
+      idRow.append(idLabel, idValue);
+      meta.append(idRow);
+      body.append(message, meta);
+      details.append(summary, body);
+      fragment.append(details);
+    });
+    elements.feedbackList.append(fragment);
+  }
+
+  function updateFeedbackCounters() {
+    elements.feedbackUnreadCount.textContent = formatNumber(state.feedback.unreadCount);
+    elements.unreadFeedback.textContent = formatNumber(state.feedback.unreadCount);
+    if (state.feedback.loaded) {
+      elements.totalFeedback.textContent = formatNumber(state.feedback.totalAll);
+    }
+    elements.markAllFeedbackRead.disabled = state.feedback.unreadCount === 0;
+  }
+
+  async function handleFeedbackToggle(event) {
+    const details = event.target;
+    if (!(details instanceof HTMLDetailsElement) || !details.open) return;
+    const item = state.feedback.items.find((entry) => entry.id === details.dataset.feedbackId);
+    if (!item || item.readAt) return;
+
+    const previousReadAt = item.readAt;
+    item.readAt = new Date().toISOString();
+    state.feedback.unreadCount = Math.max(0, state.feedback.unreadCount - 1);
+    details.classList.remove('is-unread');
+    details.classList.add('is-read');
+    const summaryNote = details.querySelector('.feedback-summary-content > p');
+    if (summaryNote) {
+      summaryNote.textContent = `${item.page || '/assistant.html'} · 已读`;
+    }
+    updateFeedbackCounters();
+    try {
+      const response = await fetch('/api/admin/feedback/read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({ id: item.id })
+      });
+      if (response.status === 401) {
+        expireAdminSession();
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || '无法标记为已读');
+    } catch (error) {
+      item.readAt = previousReadAt;
+      state.feedback.unreadCount += 1;
+      details.classList.add('is-unread');
+      details.classList.remove('is-read');
+      if (summaryNote) {
+        summaryNote.textContent = `${item.page || '/assistant.html'} · 未读`;
+      }
+      updateFeedbackCounters();
+      showToast(error.message);
+    }
+  }
+
+  async function markAllFeedbackRead() {
+    if (!state.feedback.unreadCount || elements.markAllFeedbackRead.disabled) return;
+    elements.markAllFeedbackRead.disabled = true;
+    try {
+      const response = await fetch('/api/admin/feedback/read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({ all: true })
+      });
+      if (response.status === 401) {
+        expireAdminSession();
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || '无法全部标记为已读');
+      showToast(`已将 ${payload.updated || 0} 条意见标为已读`);
+      await loadFeedback({ reset: true, quiet: true });
+      loadStats();
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      elements.markAllFeedbackRead.disabled = state.feedback.unreadCount === 0;
+    }
+  }
+
+  function expireAdminSession() {
+    stopRefresh();
+    state.admin = null;
+    state.stats = null;
+    elements.app.hidden = true;
+    elements.gate.hidden = false;
+    showGate();
+    showError('管理员会话已过期，请重新登录。');
+  }
+
+  function getCategoryKey(category) {
+    return (
+      {
+        功能建议: 'suggestion',
+        问题反馈: 'issue',
+        内容纠错: 'correction',
+        其他: 'other'
+      }[category] || 'other'
+    );
+  }
+
+  function getDeliveryInfo(delivery) {
+    return (
+      {
+        submitted: {
+          key: 'submitted',
+          label: '邮件已转发',
+          description: '已通过邮件服务转发'
+        },
+        activation_pending: {
+          key: 'pending-activation',
+          label: '待激活邮件',
+          description: '意见已保存在站内，管理邮箱尚未完成首次激活'
+        },
+        not_configured: {
+          key: 'not-configured',
+          label: '仅站内保存',
+          description: '邮件服务未配置，意见仍保存在站内'
+        },
+        failed: {
+          key: 'failed',
+          label: '转发失败',
+          description: '邮件转发失败，意见已保存在站内'
+        },
+        pending: {
+          key: 'pending',
+          label: '投递中',
+          description: '正在处理邮件转发'
+        }
+      }[delivery] || {
+        key: 'unknown',
+        label: '状态未知',
+        description: '未记录邮件投递状态'
+      }
+    );
   }
 
   function renderUserTable() {
@@ -329,6 +660,16 @@
     } finally {
       state.admin = null;
       state.stats = null;
+      state.feedback = {
+        items: [],
+        total: 0,
+        totalAll: 0,
+        unreadCount: 0,
+        status: 'all',
+        category: 'all',
+        loaded: false,
+        loading: false
+      };
       elements.app.hidden = true;
       elements.gate.hidden = false;
       showGate();
@@ -338,8 +679,15 @@
 
   function startRefresh() {
     stopRefresh();
+    state.refreshTick = 0;
     state.refreshTimer = setInterval(() => {
-      if (!document.hidden) loadStats();
+      if (!document.hidden) {
+        loadStats();
+        state.refreshTick += 1;
+        if (state.refreshTick % 6 === 0) {
+          loadFeedback({ reset: true, quiet: true });
+        }
+      }
     }, 5000);
   }
 

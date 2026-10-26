@@ -37,12 +37,12 @@ SITE_URL=https://yewen-demo.onrender.com
 
 ## 代码回滚
 
-当前部署版本使用 Git 标签 `v0.8.0`。回滚代码：
+当前部署版本使用 Git 标签 `v0.9.0`。回滚代码：
 
 ```powershell
-git checkout v0.8.0
+git checkout v0.9.0
 npm test
-git push demo v0.8.0^{commit}:main
+git push demo v0.9.0^{commit}:main
 ```
 
 推送后 Render 会自动部署。不要使用强制推送覆盖历史。

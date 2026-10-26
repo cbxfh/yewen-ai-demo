@@ -179,6 +179,8 @@ test('admin dashboard page is separate and marked noindex', async () => {
   const html = await response.text();
   assert.match(html, /实时数据后台/);
   assert.match(html, /管理员登录/);
+  assert.match(html, /意见信箱/);
+  assert.match(html, /id="feedback-list"/);
   assert.match(html, /noindex, nofollow/);
 });
 
@@ -598,6 +600,16 @@ test('admin setup and dashboard statistics require the separate admin session', 
   const normalUserStats = await authenticatedFetch('/api/admin/stats');
   assert.equal(normalUserStats.status, 401);
   assert.equal((await normalUserStats.json()).code, 'ADMIN_AUTH_REQUIRED');
+  const normalUserFeedback = await authenticatedFetch('/api/admin/feedback');
+  assert.equal(normalUserFeedback.status, 401);
+  assert.equal((await normalUserFeedback.json()).code, 'ADMIN_AUTH_REQUIRED');
+  const normalUserMarkRead = await authenticatedFetch('/api/admin/feedback/read', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ all: true })
+  });
+  assert.equal(normalUserMarkRead.status, 401);
+  assert.equal((await normalUserMarkRead.json()).code, 'ADMIN_AUTH_REQUIRED');
 
   const setup = await fetch(`${baseUrl}/api/admin/setup`, {
     method: 'POST',
@@ -633,6 +645,58 @@ test('admin setup and dashboard statistics require the separate admin session', 
   assert.ok(stats.users.every((user) => !Object.hasOwn(user, 'salt')));
   assert.ok(stats.totalDocuments >= 2);
   assert.ok(stats.totalMessages >= 2);
+  assert.ok(stats.feedbackTotal >= 2);
+  assert.equal(stats.unreadFeedback, stats.feedbackTotal);
+
+  const feedbackResponse = await authenticatedFetch('/api/admin/feedback', {}, adminCookie);
+  assert.equal(feedbackResponse.status, 200);
+  const feedback = await feedbackResponse.json();
+  assert.ok(feedback.items.length >= 2);
+  assert.equal(feedback.totalAll, stats.feedbackTotal);
+  assert.ok(feedback.items.some((item) => /导出和打印/.test(item.message)));
+
+  const firstFeedback = feedback.items[0];
+  const readResponse = await authenticatedFetch(
+    '/api/admin/feedback/read',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: firstFeedback.id })
+    },
+    adminCookie
+  );
+  assert.equal(readResponse.status, 200);
+  assert.ok((await readResponse.json()).item.readAt);
+
+  const unreadResponse = await authenticatedFetch(
+    '/api/admin/feedback?status=unread',
+    {},
+    adminCookie
+  );
+  const unread = await unreadResponse.json();
+  assert.equal(unread.unreadCount, stats.unreadFeedback - 1);
+  assert.ok(unread.items.every((item) => !item.readAt));
+
+  const categoryResponse = await authenticatedFetch(
+    `/api/admin/feedback?category=${encodeURIComponent('功能建议')}`,
+    {},
+    adminCookie
+  );
+  const category = await categoryResponse.json();
+  assert.ok(category.items.length >= 1);
+  assert.ok(category.items.every((item) => item.category === '功能建议'));
+
+  const markAllResponse = await authenticatedFetch(
+    '/api/admin/feedback/read',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true })
+    },
+    adminCookie
+  );
+  assert.equal(markAllResponse.status, 200);
+  assert.equal((await markAllResponse.json()).unreadCount, 0);
 
   const logout = await authenticatedFetch(
     '/api/admin/logout',
