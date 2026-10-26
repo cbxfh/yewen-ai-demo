@@ -75,14 +75,19 @@ test('health endpoint reports the service as ready', async () => {
   });
 });
 
-test('resource endpoint returns both industries and twelve complete resources', async () => {
+test('resource endpoint returns three knowledge areas and 52 complete resources', async () => {
   const response = await fetch(`${baseUrl}/api/resources`);
   assert.equal(response.status, 200);
   const payload = await response.json();
-  assert.equal(payload.industries.length, 2);
-  assert.equal(payload.resources.length, 12);
+  assert.equal(payload.industries.length, 3);
+  assert.equal(payload.topics.length, 8);
+  assert.equal(payload.resources.length, 52);
   assert.equal(payload.resources.filter((item) => item.industry === 'food').length, 6);
   assert.equal(payload.resources.filter((item) => item.industry === 'beauty').length, 6);
+  assert.equal(payload.resources.filter((item) => item.industry === 'growth').length, 40);
+  for (const topic of payload.topics) {
+    assert.equal(payload.resources.filter((item) => item.topicId === topic.id).length, 5);
+  }
   payload.resources.forEach((resource) => {
     assert.ok(resource.id);
     assert.ok(resource.title);
@@ -90,6 +95,11 @@ test('resource endpoint returns both industries and twelve complete resources', 
     assert.ok(Array.isArray(resource.sections) && resource.sections.length >= 3);
     assert.ok(Array.isArray(resource.checklist) && resource.checklist.length >= 5);
   });
+  assert.ok(
+    payload.resources
+      .filter((resource) => resource.industry === 'growth')
+      .every((resource) => Array.isArray(resource.sources) && resource.sources.length >= 3)
+  );
 });
 
 test('resource endpoint validates industry filters', async () => {
@@ -102,6 +112,16 @@ test('resource endpoint validates industry filters', async () => {
   const invalid = await fetch(`${baseUrl}/api/resources?industry=unknown`);
   assert.equal(invalid.status, 400);
   assert.equal((await invalid.json()).code, 'INVALID_INDUSTRY');
+
+  const growth = await fetch(`${baseUrl}/api/resources?industry=growth`);
+  assert.equal(growth.status, 200);
+  assert.equal((await growth.json()).resources.length, 40);
+
+  const teacher = await fetch(`${baseUrl}/api/resources?industry=growth&topic=teacher`);
+  assert.equal(teacher.status, 200);
+  const teacherPayload = await teacher.json();
+  assert.equal(teacherPayload.resources.length, 5);
+  assert.ok(teacherPayload.resources.every((item) => item.topicName === '教师行业'));
 });
 
 test('index page includes security headers and primary content', async () => {
@@ -128,6 +148,7 @@ test('dedicated assistant page exposes API settings and personal knowledge impor
   assert.match(html, /TXT · MD · CSV · JSON · HTML/);
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /name="viewport"/);
+  assert.match(html, /data-chat-industry="growth"/);
 });
 
 test('login page is public and exposes registration and login forms', async () => {
@@ -572,5 +593,32 @@ test('AI resource context stays within the configured limit', () => {
   const context = buildResourceContext('all', 4000);
   assert.ok(context.length <= 4000);
   assert.match(context, /餐饮门店食品安全日检清单/);
-  assert.equal(resources.length, 12);
+  assert.equal(resources.length, 52);
+  assert.equal(new Set(resources.map((resource) => resource.id)).size, resources.length);
+  const growthResources = resources.filter((resource) => resource.industry === 'growth');
+  assert.equal(growthResources.length, 40);
+  assert.deepEqual(
+    Object.fromEntries(
+      [...new Set(growthResources.map((resource) => resource.topicId))].map((topicId) => [
+        topicId,
+        growthResources.filter((resource) => resource.topicId === topicId).length
+      ])
+    ),
+    {
+      university: 5,
+      ai: 5,
+      books: 5,
+      finance: 5,
+      teacher: 5,
+      'cross-border': 5,
+      startup: 5,
+      'short-video': 5
+    }
+  );
+  assert.ok(
+    growthResources.every((resource) =>
+      resource.sources.every((source) => /^https:\/\//.test(source.url))
+    )
+  );
+  assert.match(buildResourceContext('growth', 4000, '教师课堂管理'), /课堂管理与积极行为支持/);
 });

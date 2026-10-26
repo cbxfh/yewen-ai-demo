@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="业问｜门店老板随身的 AI 参谋：餐饮与美容美发门店专业资料、执行清单与 AI 对话入口。"
+      content="业问｜门店老板随身的 AI 参谋：餐饮、美业、大学、AI、教师、跨境电商、创业与短视频专业资料。"
     >
     <meta property="og:site_name" content="业问">
     <meta property="og:type" content="website">
     <meta property="og:title" content="业问｜门店老板随身的 AI 参谋">
-    <meta property="og:description" content="餐饮与美容美发门店专业资料、个人知识库与 AI 经营参谋。">
+    <meta property="og:description" content="覆盖餐饮、美业与成长通识的专业资料、个人知识库与 AI 参谋。">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="业问｜门店老板随身的 AI 参谋">
-    <meta name="twitter:description" content="餐饮与美容美发门店专业资料、个人知识库与 AI 经营参谋。">
+    <meta name="twitter:description" content="覆盖餐饮、美业与成长通识的专业资料、个人知识库与 AI 参谋。">
     <meta name="theme-color" content="#f4f1e8">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -134,15 +134,15 @@
           <div class="hero-copy reveal">
             <div class="eyebrow">
               <span class="eyebrow-dot"></span>
-              双行业知识中枢
-              <span class="version-pill">EDITION 02</span>
+              多领域知识中枢
+              <span class="version-pill">EDITION 03</span>
             </div>
             <h1>
               把门店经验，<br>
               <span class="hero-second-line">变成<span class="serif-accent">可执行的答案。</span></span>
             </h1>
             <p class="hero-intro">
-              为餐饮与美容美发门店整理的经营资料、执行清单与 AI 工作入口。
+              为门店经营、职业成长与个人学习整理的专业资料、执行清单与 AI 工作入口。
               从发现问题，到知道下一步怎么做。
             </p>
 
@@ -153,7 +153,7 @@
                 id="hero-search-input"
                 type="search"
                 name="query"
-                placeholder="试试搜：成本卡、卫生、预约、投诉…"
+                placeholder="试试搜：AI 入门、教师课堂、跨境电商、成本卡…"
                 autocomplete="off"
               >
               <button type="submit" aria-label="开始搜索">
@@ -163,10 +163,10 @@
             </form>
             <div class="quick-searches" aria-label="热门搜索">
               <span>大家在找</span>
+              <button type="button" data-search-term="AI">AI 入门</button>
+              <button type="button" data-search-term="教师">教师课堂</button>
+              <button type="button" data-search-term="跨境">跨境电商</button>
               <button type="button" data-search-term="成本">成本控制</button>
-              <button type="button" data-search-term="卫生">卫生管理</button>
-              <button type="button" data-search-term="预约">预约管理</button>
-              <button type="button" data-search-term="会员">会员经营</button>
             </div>
 
             <div class="hero-actions">
@@ -238,18 +238,18 @@
                 <strong>有资料依据的回答</strong>
               </div>
             </div>
-            <span class="stage-stamp" aria-hidden="true">12<br><small>TOOLS</small></span>
+            <span class="stage-stamp" aria-hidden="true">52<br><small>TOOLS</small></span>
           </div>
         </div>
 
         <div class="hero-foot reveal">
           <div class="hero-stat">
-            <strong>02</strong>
-            <span>行业方向<br><small>餐饮 · 美业</small></span>
+            <strong>03</strong>
+            <span>知识方向<br><small>餐饮 · 美业 · 成长</small></span>
           </div>
           <div class="hero-stat">
-            <strong>12</strong>
-            <span>原创示例资料<br><small>首版内容基线</small></span>
+            <strong>52</strong>
+            <span>专业资料<br><small>含 8 个成长专题</small></span>
           </div>
           <div class="hero-stat">
             <strong>01</strong>
@@ -281,7 +281,7 @@
           <div class="industry-tabs" role="tablist" aria-label="行业筛选">
             <button class="industry-tab active" data-industry="all" role="tab" aria-selected="true">
               全部资料
-              <span id="count-all">12</span>
+              <span id="count-all">52</span>
             </button>
             <button class="industry-tab food" data-industry="food" role="tab" aria-selected="false">
               餐饮行业
@@ -290,6 +290,10 @@
             <button class="industry-tab beauty" data-industry="beauty" role="tab" aria-selected="false">
               美容美发
               <span id="count-beauty">06</span>
+            </button>
+            <button class="industry-tab growth" data-industry="growth" role="tab" aria-selected="false">
+              成长与通识
+              <span id="count-growth">40</span>
             </button>
           </div>
 
@@ -315,6 +319,7 @@
             <button class="type-filter" data-type="检查清单">检查清单</button>
             <button class="type-filter" data-type="操作指南">操作指南</button>
             <button class="type-filter" data-type="经营">经营分析</button>
+            <button class="type-filter" data-type="书单">书单</button>
           </div>
           <button class="saved-filter" type="button" id="saved-filter" aria-pressed="false">
             <svg class="icon" aria-hidden="true"><use href="#icon-bookmark"></use></svg>
@@ -323,8 +328,23 @@
           </button>
         </div>
 
+        <div class="topic-filter-row" id="topic-filter-row" hidden>
+          <span>成长专题</span>
+          <div class="topic-filters" aria-label="成长专题筛选">
+            <button class="topic-filter active" type="button" data-topic="all">全部专题</button>
+            <button class="topic-filter" type="button" data-topic="university">大学指南</button>
+            <button class="topic-filter" type="button" data-topic="ai">AI 入门</button>
+            <button class="topic-filter" type="button" data-topic="books">认知书籍</button>
+            <button class="topic-filter" type="button" data-topic="finance">财经知识</button>
+            <button class="topic-filter" type="button" data-topic="teacher">教师行业</button>
+            <button class="topic-filter" type="button" data-topic="cross-border">跨境电商</button>
+            <button class="topic-filter" type="button" data-topic="startup">创业者指南</button>
+            <button class="topic-filter" type="button" data-topic="short-video">短视频运营</button>
+          </div>
+        </div>
+
         <div class="results-meta">
-          <span id="results-summary">共 12 份资料</span>
+          <span id="results-summary">共 52 份资料</span>
           <span class="results-hint">点击卡片查看完整执行内容</span>
         </div>
 
@@ -438,8 +458,8 @@
             <span class="about-index">A</span>
             <div>
               <span class="about-type">已包含</span>
-              <h3>双行业内容框架</h3>
-              <p>6 份餐饮资料 + 6 份美业资料，覆盖日常高频管理场景。</p>
+              <h3>三大知识分类</h3>
+              <p>餐饮、美业、成长与通识共 52 份资料，覆盖 8 个成长专题。</p>
             </div>
             <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg>
           </article>
@@ -502,7 +522,7 @@
         </a>
       </div>
       <div class="footer-bottom">
-        <span>© 2026 YEWEN · EDITION 02</span>
+        <span>© 2026 YEWEN · EDITION 03</span>
         <span>内容示例 · 待正式复核</span>
       </div>
     </footer>
@@ -550,6 +570,11 @@
             <div class="dialog-section-label">END-OF-SERVICE CHECK</div>
             <h3>执行核对</h3>
             <div id="dialog-checklist-items"></div>
+          </section>
+          <section class="dialog-sources" id="dialog-sources-section" hidden>
+            <div class="dialog-section-label">REFERENCE SOURCES</div>
+            <h3>公开参考来源</h3>
+            <div class="dialog-source-links" id="dialog-sources"></div>
           </section>
           <div class="dialog-provenance">
             <span>资料状态</span>

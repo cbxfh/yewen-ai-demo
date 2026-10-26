@@ -435,7 +435,7 @@
   }
 
   function setChatIndustry(industry) {
-    state.chatIndustry = ['all', 'food', 'beauty'].includes(industry) ? industry : 'all';
+    state.chatIndustry = ['all', 'food', 'beauty', 'growth'].includes(industry) ? industry : 'all';
     document.querySelectorAll('[data-chat-industry]').forEach((button) => {
       button.classList.toggle('active', button.dataset.chatIndustry === state.chatIndustry);
     });

@@ -1,5 +1,7 @@
 'use strict';
 
+const { growthResources, topicNames } = require('./growth-resources');
+
 const industries = [
   {
     id: 'food',
@@ -18,10 +20,19 @@ const industries = [
     description: '围绕咨询、服务、卫生、预约和会员经营，建立更稳定的门店服务标准。',
     color: '#a44368',
     softColor: '#f1d4df'
+  },
+  {
+    id: 'growth',
+    name: '成长与通识',
+    shortName: '成长',
+    eyebrow: 'LEARNING & CAREER',
+    description: '面向大学、职业、教师、创业、财经与内容运营，把学习资料变成可执行的方法。',
+    color: '#3f6f67',
+    softColor: '#d9e6df'
   }
 ];
 
-const resources = [
+const baseResources = [
   {
     id: 'food-safety-daily-check',
     industry: 'food',
@@ -781,16 +792,61 @@ const resources = [
   }
 ];
 
-function getResources({ industry = 'all', featuredOnly = false } = {}) {
+const resources = [...baseResources, ...growthResources];
+
+function getResources({ industry = 'all', topic = 'all', featuredOnly = false } = {}) {
   return resources.filter((resource) => {
     const matchesIndustry = industry === 'all' || resource.industry === industry;
-    return matchesIndustry && (!featuredOnly || resource.featured);
+    const matchesTopic = topic === 'all' || resource.topicId === topic;
+    return matchesIndustry && matchesTopic && (!featuredOnly || resource.featured);
   });
 }
 
-function buildResourceContext(industry = 'all', maxChars = 12000) {
+function getSearchTerms(query) {
+  const stopWords = new Set(['什么', '如何', '怎么', '请问', '帮我', '可以', '一个', '以及', '应该']);
+  const terms = new Set();
+  const sequences = String(query || '').match(/[\p{L}\p{N}]+/gu) || [];
+  for (const sequence of sequences) {
+    const normalized = sequence.toLocaleLowerCase('zh-CN');
+    if (/^[a-z0-9_-]+$/i.test(normalized)) {
+      if (normalized.length >= 2) terms.add(normalized);
+      continue;
+    }
+    if (normalized.length <= 6 && !stopWords.has(normalized)) terms.add(normalized);
+    for (let index = 0; index < normalized.length - 1; index += 1) {
+      const pair = normalized.slice(index, index + 2);
+      if (!stopWords.has(pair)) terms.add(pair);
+    }
+  }
+  return [...terms];
+}
+
+function rankResourcesForQuestion(selected, query) {
+  const terms = getSearchTerms(query);
+  if (!terms.length) return selected;
+  return selected
+    .map((resource, index) => {
+      const title = resource.title.toLocaleLowerCase('zh-CN');
+      const topic = String(resource.topicName || '').toLocaleLowerCase('zh-CN');
+      const summary = resource.summary.toLocaleLowerCase('zh-CN');
+      const tags = resource.tags.join(' ').toLocaleLowerCase('zh-CN');
+      let score = 0;
+      for (const term of terms) {
+        if (title.includes(term)) score += 6;
+        if (topic.includes(term)) score += 5;
+        if (tags.includes(term)) score += 3;
+        if (summary.includes(term)) score += 1;
+      }
+      return { resource, index, score };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.resource);
+}
+
+function buildResourceContext(industry = 'all', maxChars = 12000, query = '') {
   const selected = getResources({ industry });
-  const blocks = selected.map((resource) => {
+  const ranked = rankResourcesForQuestion(selected, query);
+  const blocks = ranked.map((resource) => {
     const sectionText = resource.sections
       .map((section) => {
         const bullets = section.bullets.map((item) => `- ${item}`).join('\n');
@@ -802,10 +858,12 @@ function buildResourceContext(industry = 'all', maxChars = 12000) {
       `【资料】${resource.title}`,
       `编号：${resource.id}`,
       `类型：${resource.type}`,
+      `专题：${resource.topicName || '行业资料'}`,
       `摘要：${resource.summary}`,
       sectionText,
       `检查项：${resource.checklist.join('；')}`,
-      `提示：${resource.callout}`
+      `提示：${resource.callout}`,
+      `参考来源：${(resource.sources || []).map((source) => source.label).join('；') || '站内原创整理'}`
     ].join('\n');
   });
 
@@ -819,6 +877,7 @@ function buildResourceContext(industry = 'all', maxChars = 12000) {
 
 module.exports = {
   industries,
+  topicNames,
   resources,
   getResources,
   buildResourceContext
