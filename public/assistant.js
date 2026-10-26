@@ -68,6 +68,15 @@
     previewTitle: document.getElementById('preview-title'),
     previewMeta: document.getElementById('preview-meta'),
     previewContent: document.getElementById('preview-content'),
+    feedbackModal: document.getElementById('feedback-modal'),
+    feedbackDialog: document.querySelector('.feedback-dialog'),
+    feedbackForm: document.getElementById('feedback-form'),
+    feedbackCategory: document.getElementById('feedback-category'),
+    feedbackMessage: document.getElementById('feedback-message'),
+    feedbackError: document.getElementById('feedback-error'),
+    feedbackAccount: document.getElementById('feedback-account'),
+    openFeedback: document.getElementById('open-feedback'),
+    submitFeedback: document.getElementById('submit-feedback'),
     knowledgePanel: document.getElementById('knowledge-panel'),
     knowledgeBackdrop: document.getElementById('knowledge-backdrop'),
     openKnowledgePanel: document.getElementById('open-knowledge-panel'),
@@ -86,6 +95,7 @@
     welcomeBlock: document.getElementById('welcome-block'),
     chatForm: document.getElementById('workspace-chat-form'),
     chatInput: document.getElementById('workspace-chat-input'),
+    chatIndustrySelect: document.getElementById('chat-industry-select'),
     sendButton: document.getElementById('workspace-send'),
     clearChat: document.getElementById('clear-chat'),
     toast: document.getElementById('toast')
@@ -138,6 +148,11 @@
     document.querySelectorAll('[data-close-preview]').forEach((element) => {
       element.addEventListener('click', () => closeModal(elements.previewModal));
     });
+    elements.openFeedback.addEventListener('click', openFeedbackModal);
+    document.querySelectorAll('[data-close-feedback]').forEach((element) => {
+      element.addEventListener('click', () => closeModal(elements.feedbackModal));
+    });
+    elements.feedbackForm.addEventListener('submit', submitFeedback);
 
     elements.knowledgeSearch.addEventListener('input', () => {
       state.knowledgeQuery = elements.knowledgeSearch.value.trim().toLowerCase();
@@ -152,8 +167,8 @@
     elements.manageContext.addEventListener('click', openKnowledgePanel);
     elements.knowledgeBackdrop.addEventListener('click', closeKnowledgePanel);
 
-    document.querySelectorAll('[data-chat-industry]').forEach((button) => {
-      button.addEventListener('click', () => setChatIndustry(button.dataset.chatIndustry));
+    elements.chatIndustrySelect.addEventListener('change', () => {
+      setChatIndustry(elements.chatIndustrySelect.value);
     });
     document.querySelectorAll('[data-starter-prompt]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -435,10 +450,21 @@
   }
 
   function setChatIndustry(industry) {
-    state.chatIndustry = ['all', 'food', 'beauty', 'growth'].includes(industry) ? industry : 'all';
-    document.querySelectorAll('[data-chat-industry]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.chatIndustry === state.chatIndustry);
-    });
+    const validIndustries = [
+      'all',
+      'food',
+      'beauty',
+      'university',
+      'ai',
+      'books',
+      'finance',
+      'teacher',
+      'cross-border',
+      'startup',
+      'short-video'
+    ];
+    state.chatIndustry = validIndustries.includes(industry) ? industry : 'all';
+    elements.chatIndustrySelect.value = state.chatIndustry;
   }
 
   function handleDragEnter(event) {
@@ -866,6 +892,57 @@
     saveActiveModal(elements.pasteModal, elements.pasteDialog);
   }
 
+  function openFeedbackModal() {
+    elements.feedbackError.hidden = true;
+    elements.feedbackAccount.textContent = state.user
+      ? `当前账号：${state.user.username}`
+      : '当前账号';
+    openModal(elements.feedbackModal, elements.feedbackDialog);
+  }
+
+  async function submitFeedback(event) {
+    event.preventDefault();
+    const message = elements.feedbackMessage.value.trim();
+    elements.feedbackError.hidden = true;
+    if (message.length < 5) {
+      elements.feedbackError.textContent = '请至少输入 5 个字符。';
+      elements.feedbackError.hidden = false;
+      return;
+    }
+
+    elements.submitFeedback.disabled = true;
+    elements.submitFeedback.textContent = '提交中…';
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({
+          category: elements.feedbackCategory.value,
+          message,
+          page: '/assistant.html'
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (!response.ok) throw new Error(payload.error || '意见提交失败');
+      elements.feedbackForm.reset();
+      closeModal(elements.feedbackModal);
+      showToast(payload.message || '意见已提交，谢谢你的反馈');
+    } catch (error) {
+      elements.feedbackError.textContent = error.message;
+      elements.feedbackError.hidden = false;
+    } finally {
+      elements.submitFeedback.disabled = false;
+      elements.submitFeedback.textContent = '提交意见';
+    }
+  }
+
   function openModal(modal, dialog) {
     if (!modal.hidden) return;
     state.modalReturnFocus = document.activeElement;
@@ -890,9 +967,12 @@
 
   function handleGlobalKeydown(event) {
     if (event.key === 'Escape') {
-      const visibleModal = [elements.settingsModal, elements.pasteModal, elements.previewModal].find(
-        (modal) => !modal.hidden
-      );
+      const visibleModal = [
+        elements.settingsModal,
+        elements.pasteModal,
+        elements.previewModal,
+        elements.feedbackModal
+      ].find((modal) => !modal.hidden);
       if (visibleModal) {
         event.preventDefault();
         closeModal(visibleModal);
@@ -906,9 +986,12 @@
     }
 
     if (event.key === 'Tab') {
-      const modal = [elements.settingsModal, elements.pasteModal, elements.previewModal].find(
-        (candidate) => !candidate.hidden
-      );
+      const modal = [
+        elements.settingsModal,
+        elements.pasteModal,
+        elements.previewModal,
+        elements.feedbackModal
+      ].find((candidate) => !candidate.hidden);
       if (modal) trapFocus(event, modal);
       else if (elements.knowledgePanel.classList.contains('is-open') && window.innerWidth <= 900) {
         trapFocus(event, elements.knowledgePanel);

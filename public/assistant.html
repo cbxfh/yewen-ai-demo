@@ -89,6 +89,10 @@
       <symbol id="icon-logout" viewBox="0 0 24 24">
         <path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M14 8l4 4-4 4M9 12h9"></path>
       </symbol>
+      <symbol id="icon-mail" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+        <path d="m4 7 8 6 8-6"></path>
+      </symbol>
     </svg>
 
     <header class="workspace-header">
@@ -109,7 +113,7 @@
       <div class="header-actions">
         <a class="back-site-link" href="/">
           <svg class="icon" aria-hidden="true"><use href="#icon-arrow-left"></use></svg>
-          返回网站
+          返回主页
         </a>
         <div class="user-chip">
           <span class="user-avatar" id="user-avatar" aria-hidden="true">U</span>
@@ -228,12 +232,27 @@
             </div>
           </div>
           <div class="chat-top-actions">
-            <div class="industry-switch" role="group" aria-label="选择回答范围">
-              <button class="active" type="button" data-chat-industry="all">全部</button>
-              <button type="button" data-chat-industry="food">餐饮</button>
-              <button type="button" data-chat-industry="beauty">美业</button>
-              <button type="button" data-chat-industry="growth">成长</button>
-            </div>
+            <label class="industry-select-wrap">
+              <span class="sr-only">选择回答范围</span>
+              <select id="chat-industry-select">
+                <option value="all">全部专栏</option>
+                <option value="food">餐饮行业</option>
+                <option value="beauty">美容美发</option>
+                <option value="university">大学指南</option>
+                <option value="ai">AI 行业</option>
+                <option value="books">认知书籍</option>
+                <option value="finance">财经知识</option>
+                <option value="teacher">教师行业</option>
+                <option value="cross-border">跨境电商</option>
+                <option value="startup">创业者指南</option>
+                <option value="short-video">短视频运营</option>
+              </select>
+              <svg class="icon" aria-hidden="true"><use href="#icon-chevron"></use></svg>
+            </label>
+            <button class="feedback-entry-button" id="open-feedback" type="button">
+              <svg class="icon" aria-hidden="true"><use href="#icon-mail"></use></svg>
+              <span>意见箱</span>
+            </button>
             <button class="icon-button clear-chat-button" id="clear-chat" type="button" aria-label="清空对话">
               <svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg>
             </button>
@@ -254,7 +273,7 @@
         <div class="chat-stream" id="chat-stream" aria-live="polite">
           <section class="welcome-block" id="welcome-block">
             <span class="welcome-kicker">YOUR INDUSTRY COPILOT</span>
-            <h2>把门店问题，<br><em>放在桌面上谈。</em></h2>
+            <h2>把问题，<br><em>放在桌面上谈。</em></h2>
             <p>
               导入自己的资料后，我会优先基于原文分析。你可以让我找问题、
               做培训提纲、整理会议结论，或把零散经验变成执行清单。
@@ -483,6 +502,59 @@
           </button>
         </header>
         <div class="preview-content" id="preview-content"></div>
+      </section>
+    </div>
+
+    <div class="modal-layer" id="feedback-modal" hidden>
+      <div class="modal-backdrop" data-close-feedback></div>
+      <section
+        class="feedback-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="feedback-title"
+        tabindex="-1"
+      >
+        <header class="modal-head">
+          <div>
+            <span class="modal-kicker">FEEDBACK</span>
+            <h2 id="feedback-title">业问意见箱</h2>
+            <p>告诉我们功能问题、内容错误或使用建议。意见会通过第三方邮件服务发送到站点管理邮箱。</p>
+          </div>
+          <button class="icon-button" type="button" data-close-feedback aria-label="关闭意见箱">
+            <svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </header>
+        <form class="feedback-form" id="feedback-form">
+          <label>
+            <span>意见类型</span>
+            <select id="feedback-category">
+              <option value="功能建议">功能建议</option>
+              <option value="问题反馈">问题反馈</option>
+              <option value="内容纠错">内容纠错</option>
+              <option value="其他">其他</option>
+            </select>
+          </label>
+          <label>
+            <span>具体内容</span>
+            <textarea
+              id="feedback-message"
+              rows="7"
+              minlength="5"
+              maxlength="2000"
+              placeholder="请描述你遇到的问题、希望增加的功能，或需要纠正的内容…"
+              required
+            ></textarea>
+          </label>
+          <p class="feedback-privacy">
+            <svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg>
+            提交时会附带你的登录用户名，便于定位问题。请勿填写密码、API Key 或其他敏感信息。
+          </p>
+          <p class="form-error" id="feedback-error" hidden></p>
+          <div class="feedback-actions">
+            <span id="feedback-account">当前账号</span>
+            <button class="primary-button" id="submit-feedback" type="submit">提交意见</button>
+          </div>
+        </form>
       </section>
     </div>
 

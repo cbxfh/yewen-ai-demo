@@ -26,6 +26,10 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      - key: FEEDBACK_EMAIL
+        value: liusong208825@outlook.com
+      - key: SITE_URL
+        value: https://yewen-demo.onrender.com
     disk:
       name: industry-ai-user-data
       mountPath: /app/.data

@@ -17,6 +17,8 @@ let testSessionCookie;
 
 before(async () => {
   process.env.AI_API_KEY = '';
+  process.env.FEEDBACK_EMAIL = '';
+  process.env.FEEDBACK_SUBMIT_URL = '';
   testConfigPath = path.join(os.tmpdir(), `industry-ai-toolkit-test-${process.pid}.json`);
   process.env.AI_CONFIG_PATH = testConfigPath;
   testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'industry-ai-toolkit-data-'));
@@ -75,16 +77,28 @@ test('health endpoint reports the service as ready', async () => {
   });
 });
 
-test('resource endpoint returns three knowledge areas and 52 complete resources', async () => {
+test('resource endpoint returns ten knowledge columns and 52 complete resources', async () => {
   const response = await fetch(`${baseUrl}/api/resources`);
   assert.equal(response.status, 200);
   const payload = await response.json();
-  assert.equal(payload.industries.length, 3);
+  assert.equal(payload.industries.length, 10);
   assert.equal(payload.topics.length, 8);
   assert.equal(payload.resources.length, 52);
   assert.equal(payload.resources.filter((item) => item.industry === 'food').length, 6);
   assert.equal(payload.resources.filter((item) => item.industry === 'beauty').length, 6);
-  assert.equal(payload.resources.filter((item) => item.industry === 'growth').length, 40);
+  const extendedIndustries = [
+    'university',
+    'ai',
+    'books',
+    'finance',
+    'teacher',
+    'cross-border',
+    'startup',
+    'short-video'
+  ];
+  for (const industry of extendedIndustries) {
+    assert.equal(payload.resources.filter((item) => item.industry === industry).length, 5);
+  }
   for (const topic of payload.topics) {
     assert.equal(payload.resources.filter((item) => item.topicId === topic.id).length, 5);
   }
@@ -97,7 +111,7 @@ test('resource endpoint returns three knowledge areas and 52 complete resources'
   });
   assert.ok(
     payload.resources
-      .filter((resource) => resource.industry === 'growth')
+      .filter((resource) => extendedIndustries.includes(resource.industry))
       .every((resource) => Array.isArray(resource.sources) && resource.sources.length >= 3)
   );
 });
@@ -113,11 +127,7 @@ test('resource endpoint validates industry filters', async () => {
   assert.equal(invalid.status, 400);
   assert.equal((await invalid.json()).code, 'INVALID_INDUSTRY');
 
-  const growth = await fetch(`${baseUrl}/api/resources?industry=growth`);
-  assert.equal(growth.status, 200);
-  assert.equal((await growth.json()).resources.length, 40);
-
-  const teacher = await fetch(`${baseUrl}/api/resources?industry=growth&topic=teacher`);
+  const teacher = await fetch(`${baseUrl}/api/resources?industry=teacher`);
   assert.equal(teacher.status, 200);
   const teacherPayload = await teacher.json();
   assert.equal(teacherPayload.resources.length, 5);
@@ -148,7 +158,9 @@ test('dedicated assistant page exposes API settings and personal knowledge impor
   assert.match(html, /TXT · MD · CSV · JSON · HTML/);
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /name="viewport"/);
-  assert.match(html, /data-chat-industry="growth"/);
+  assert.match(html, /id="chat-industry-select"/);
+  assert.match(html, /value="teacher"/);
+  assert.match(html, /id="feedback-form"/);
 });
 
 test('login page is public and exposes registration and login forms', async () => {
@@ -299,6 +311,65 @@ test('unauthenticated visitors cannot access private user endpoints', async () =
   });
   assert.equal(chat.status, 401);
   assert.equal((await chat.json()).code, 'AUTH_REQUIRED');
+
+  const feedback = await fetch(`${baseUrl}/api/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category: '功能建议', message: '希望增加导出功能。' })
+  });
+  assert.equal(feedback.status, 401);
+});
+
+test('feedback is stored and can be forwarded through a configured mail endpoint', async () => {
+  let received;
+  const mailEndpoint = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      received = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: 'true', message: 'Email sent' }));
+    });
+  });
+  await new Promise((resolve) => mailEndpoint.listen(0, '127.0.0.1', resolve));
+  process.env.FEEDBACK_SUBMIT_URL = `http://127.0.0.1:${mailEndpoint.address().port}/feedback`;
+  try {
+    const response = await authenticatedFetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: '功能建议',
+        message: '希望资料库增加导出和打印功能。',
+        page: '/assistant.html'
+      })
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.submitted, true);
+    assert.equal(received.account, 'main_tester');
+    assert.equal(received.category, '功能建议');
+    assert.match(received.message, /导出和打印/);
+  } finally {
+    process.env.FEEDBACK_SUBMIT_URL = '';
+    await new Promise((resolve, reject) => {
+      mailEndpoint.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
+test('feedback is stored even when mail delivery is not configured', async () => {
+  process.env.FEEDBACK_EMAIL = '';
+  process.env.FEEDBACK_SUBMIT_URL = '';
+  const response = await authenticatedFetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      category: '问题反馈',
+      message: '测试未配置邮件时的保存行为。'
+    })
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, 'FEEDBACK_NOT_CONFIGURED');
 });
 
 test('chat endpoint rejects malformed messages before calling a provider', async () => {
@@ -595,7 +666,19 @@ test('AI resource context stays within the configured limit', () => {
   assert.match(context, /餐饮门店食品安全日检清单/);
   assert.equal(resources.length, 52);
   assert.equal(new Set(resources.map((resource) => resource.id)).size, resources.length);
-  const growthResources = resources.filter((resource) => resource.industry === 'growth');
+  const extendedIndustries = [
+    'university',
+    'ai',
+    'books',
+    'finance',
+    'teacher',
+    'cross-border',
+    'startup',
+    'short-video'
+  ];
+  const growthResources = resources.filter((resource) =>
+    extendedIndustries.includes(resource.industry)
+  );
   assert.equal(growthResources.length, 40);
   assert.deepEqual(
     Object.fromEntries(
@@ -620,5 +703,5 @@ test('AI resource context stays within the configured limit', () => {
       resource.sources.every((source) => /^https:\/\//.test(source.url))
     )
   );
-  assert.match(buildResourceContext('growth', 4000, '教师课堂管理'), /课堂管理与积极行为支持/);
+  assert.match(buildResourceContext('teacher', 4000, '课堂管理'), /课堂管理与积极行为支持/);
 });

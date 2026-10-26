@@ -830,6 +830,63 @@ button:disabled {
   align-items: center;
 }
 
+.industry-select-wrap {
+  position: relative;
+  display: inline-flex;
+  min-width: 142px;
+  height: 36px;
+  align-items: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.industry-select-wrap select {
+  width: 100%;
+  height: 100%;
+  padding: 0 32px 0 13px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.industry-select-wrap .icon {
+  position: absolute;
+  right: 11px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.feedback-entry-button {
+  display: inline-flex;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 800;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.feedback-entry-button:hover {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.feedback-entry-button .icon {
+  width: 14px;
+  height: 14px;
+}
+
 .industry-switch {
   display: flex;
   padding: 3px;
@@ -1415,7 +1472,8 @@ button:disabled {
 
 .settings-dialog,
 .paste-dialog,
-.preview-dialog {
+.preview-dialog,
+.feedback-dialog {
   position: relative;
   z-index: 1;
   display: flex;
@@ -1436,6 +1494,10 @@ button:disabled {
 
 .preview-dialog {
   width: min(850px, 100%);
+}
+
+.feedback-dialog {
+  width: min(650px, 100%);
 }
 
 .modal-head {
@@ -1500,7 +1562,8 @@ button:disabled {
 }
 
 .settings-form,
-.paste-form {
+.paste-form,
+.feedback-form {
   padding: 22px 28px 25px;
   overflow-y: auto;
 }
@@ -1642,6 +1705,93 @@ button:disabled {
   gap: 16px;
 }
 
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feedback-form label {
+  display: flex;
+  flex-direction: column;
+}
+
+.feedback-form label > span {
+  margin-bottom: 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.feedback-form select,
+.feedback-form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.65;
+  background: var(--white);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  outline: 0;
+}
+
+.feedback-form select {
+  min-height: 45px;
+}
+
+.feedback-form textarea {
+  min-height: 190px;
+  resize: vertical;
+}
+
+.feedback-form select:focus,
+.feedback-form textarea:focus {
+  border-color: var(--green);
+}
+
+.feedback-privacy {
+  display: flex;
+  gap: 8px;
+  padding: 11px 12px;
+  margin: 0;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.65;
+  background: var(--paper);
+  border-radius: 7px;
+}
+
+.feedback-privacy .icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.feedback-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.feedback-actions > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.feedback-form .form-error {
+  padding: 10px 12px;
+  margin: 0;
+  color: #743d2d;
+  font-size: 11px;
+  line-height: 1.6;
+  background: #fae8dd;
+  border: 1px solid #e8bfa9;
+  border-radius: 7px;
+}
+
 .paste-form textarea {
   min-height: 290px;
   resize: vertical;
@@ -1743,7 +1893,9 @@ button:disabled {
 
 @media (max-width: 900px) {
   .back-site-link {
-    display: none;
+    display: inline-flex;
+    padding: 7px 9px;
+    font-size: 11px;
   }
 
   .workspace-layout {
@@ -2032,7 +2184,8 @@ button:disabled {
 
   .settings-dialog,
   .paste-dialog,
-  .preview-dialog {
+  .preview-dialog,
+  .feedback-dialog {
     width: 100%;
     height: 100%;
     max-height: none;
@@ -2052,12 +2205,45 @@ button:disabled {
   }
 
   .settings-form,
-  .paste-form {
+  .paste-form,
+  .feedback-form {
     padding: 18px 17px 22px;
   }
 
   .settings-form {
     grid-template-columns: 1fr;
+  }
+
+  .feedback-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .feedback-actions .primary-button {
+    width: 100%;
+  }
+
+  .chat-top-actions {
+    gap: 5px;
+  }
+
+  .industry-select-wrap {
+    min-width: 112px;
+  }
+
+  .industry-select-wrap select {
+    padding-left: 10px;
+    font-size: 11px;
+  }
+
+  .feedback-entry-button {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .feedback-entry-button span {
+    display: none;
   }
 
   .settings-form > label,

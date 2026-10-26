@@ -25,18 +25,24 @@ AI_MODEL=deepseek-chat
 AI_MAX_TOKENS=1200
 USER_DAILY_REQUEST_LIMIT=30
 PUBLIC_DAILY_REQUEST_LIMIT=100
+FEEDBACK_EMAIL=liusong208825@outlook.com
+SITE_URL=https://yewen-demo.onrender.com
 ```
 
 密钥只保存在 Render 环境变量和本机 `.runtime` 中，不进入 Git。
 
+## 意见箱邮件激活
+
+意见会先保存在服务端 `.data/feedback.json`，再通过 FormSubmit 转发到 `FEEDBACK_EMAIL`。首次启用时，管理邮箱会收到一封 FormSubmit 激活邮件，必须点击其中的 **Activate Form** 链接，之后邮件才能正式投递。激活前提交的意见仍会保存在服务端，但状态会标记为 `activation_pending`。
+
 ## 代码回滚
 
-当前部署版本使用 Git 标签 `v0.6.0-demo`。回滚代码：
+当前部署版本使用 Git 标签 `v0.8.0`。回滚代码：
 
 ```powershell
-git checkout v0.6.0-demo
+git checkout v0.8.0
 npm test
-git push demo v0.6.0-demo^{commit}:main
+git push demo v0.8.0^{commit}:main
 ```
 
 推送后 Render 会自动部署。不要使用强制推送覆盖历史。

@@ -536,17 +536,15 @@ function buildKnowledgePrompt(knowledge) {
 }
 
 function buildSystemPrompt(industry, knowledge = [], question = '') {
-  const industryLabels = {
-    all: '餐饮与美容美发',
-    food: '餐饮',
-    beauty: '美容美发',
-    growth: '大学、AI、职业、教师、创业、财经和短视频等成长与通识'
-  };
+  const industryLabels = Object.fromEntries(
+    industries.map((item) => [item.id, item.name])
+  );
+  industryLabels.all = industries.map((item) => item.name).join('、');
   const context = buildResourceContext(industry, 12000, question);
   const knowledgePrompt = buildKnowledgePrompt(knowledge);
   return [
     '你是“业问”的专业经营助理。',
-    `当前服务范围是：${industryLabels[industry]}。`,
+    `当前服务范围是：${industryLabels[industry] || industryLabels.all}。`,
     '你的回答要面向门店一线执行，优先给出判断依据、步骤、检查项和注意事项。',
     '下方是站内示例资料。引用时可使用「参考：《资料标题》」；不要编造站外资料、数据或法规条文。',
     '如用户选择了个人知识库资料，应优先基于这些资料分析，并明确区分资料中的事实、你的推断和待确认信息。引用个人资料时写作「参考个人资料：《文件名》」。',
@@ -887,6 +885,142 @@ function handleAdminStats(req, res) {
   }
 }
 
+function getFeedbackConfig() {
+  const email = String(process.env.FEEDBACK_EMAIL || '').trim();
+  const customUrl = String(process.env.FEEDBACK_SUBMIT_URL || '').trim();
+  const siteUrl = String(process.env.SITE_URL || 'https://yewen-demo.onrender.com').replace(/\/+$/, '');
+  if (customUrl) return { email, endpoint: customUrl, siteUrl };
+  if (email) {
+    return {
+      email,
+      endpoint: `https://formsubmit.co/ajax/${encodeURIComponent(email)}`,
+      siteUrl
+    };
+  }
+  return { email: '', endpoint: '', siteUrl };
+}
+
+async function handleFeedback(req, res) {
+  const user = requireAuthenticatedUser(req, res);
+  if (!user) return;
+
+  const rate = checkRateLimit(`feedback:${getClientIp(req)}`);
+  if (!rate.allowed) {
+    json(
+      res,
+      429,
+      { error: '意见提交过于频繁，请稍后再试。', code: 'RATE_LIMITED' },
+      { 'Retry-After': String(rate.retryAfter) }
+    );
+    return;
+  }
+
+  let feedback;
+  try {
+    const body = await readJsonBody(req);
+    const category = String(body.category || '其他').trim();
+    const message = String(body.message || '').trim();
+    const page = String(body.page || '/assistant.html').trim();
+    if (!['功能建议', '问题反馈', '内容纠错', '其他'].includes(category)) {
+      throw Object.assign(new Error('意见分类无效'), { status: 400, code: 'INVALID_FEEDBACK_CATEGORY' });
+    }
+    if (message.length < 5 || message.length > 2000) {
+      throw Object.assign(new Error('意见内容需为 5–2000 个字符'), {
+        status: 400,
+        code: 'INVALID_FEEDBACK_MESSAGE'
+      });
+    }
+
+    const store = getUserStore();
+    feedback = store.saveFeedback({
+      userId: user.id,
+      username: user.username,
+      category,
+      message,
+      page
+    });
+
+    const config = getFeedbackConfig();
+    if (!config.endpoint) {
+      store.updateFeedbackDelivery(feedback.id, 'not_configured');
+      json(res, 503, {
+        error: '意见已保存在服务端，但邮件投递尚未配置。',
+        code: 'FEEDBACK_NOT_CONFIGURED',
+        feedbackId: feedback.id
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    let upstream;
+    try {
+      upstream = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Origin: config.siteUrl,
+          Referer: `${config.siteUrl}/assistant.html`
+        },
+        body: JSON.stringify({
+          _subject: `[业问意见箱] ${category}`,
+          _template: 'table',
+          _captcha: 'false',
+          account: user.username,
+          category,
+          message,
+          page,
+          submittedAt: feedback.createdAt
+        }),
+        signal: controller.signal
+      });
+    } catch {
+      store.updateFeedbackDelivery(feedback.id, 'failed');
+      json(res, 502, {
+        error: '意见已保存在服务端，但邮件转发失败，请稍后再试。',
+        code: 'FEEDBACK_DELIVERY_FAILED',
+        feedbackId: feedback.id
+      });
+      return;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const result = await upstream.json().catch(() => ({}));
+    const activationRequired =
+      upstream.ok &&
+      String(result.success).toLowerCase() !== 'true' &&
+      /activat/i.test(String(result.message || ''));
+    if (!upstream.ok || (String(result.success).toLowerCase() !== 'true' && !activationRequired)) {
+      store.updateFeedbackDelivery(feedback.id, 'failed', JSON.stringify(result).slice(0, 300));
+      json(res, 502, {
+        error: '意见已保存在服务端，但邮件服务暂时不可用。',
+        code: 'FEEDBACK_DELIVERY_FAILED',
+        feedbackId: feedback.id
+      });
+      return;
+    }
+
+    store.updateFeedbackDelivery(feedback.id, activationRequired ? 'activation_pending' : 'submitted');
+    json(res, 200, {
+      submitted: true,
+      feedbackId: feedback.id,
+      activationRequired,
+      message: activationRequired
+        ? '意见已保存。请到管理邮箱点击确认邮件，完成首次意见箱激活。'
+        : '意见已提交并转发。'
+    });
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    json(res, status, {
+      error: status >= 500 ? '意见提交失败，请稍后再试。' : error.message,
+      code: error.code || 'FEEDBACK_FAILED',
+      ...(feedback ? { feedbackId: feedback.id } : {})
+    });
+  }
+}
+
 function handleKnowledgeList(req, res) {
   const user = requireAuthenticatedUser(req, res);
   if (!user) return;
@@ -1138,6 +1272,11 @@ function createApp() {
 
       if (pathname === '/api/admin/stats' && req.method === 'GET') {
         handleAdminStats(req, res);
+        return;
+      }
+
+      if (pathname === '/api/feedback' && req.method === 'POST') {
+        await handleFeedback(req, res);
         return;
       }
 

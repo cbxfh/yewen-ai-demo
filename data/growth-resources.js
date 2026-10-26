@@ -126,7 +126,7 @@ const section = (title, paragraphs, bullets) => ({ title, paragraphs, bullets })
 
 function growthResource(topicId, resource) {
   return {
-    industry: 'growth',
+    industry: topicId,
     topicId,
     topicName: topicNames[topicId],
     updatedAt: '2026-10-26',

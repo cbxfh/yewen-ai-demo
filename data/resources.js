@@ -22,13 +22,76 @@ const industries = [
     softColor: '#f1d4df'
   },
   {
-    id: 'growth',
-    name: '成长与通识',
-    shortName: '成长',
-    eyebrow: 'LEARNING & CAREER',
-    description: '面向大学、职业、教师、创业、财经与内容运营，把学习资料变成可执行的方法。',
+    id: 'university',
+    name: '大学指南',
+    shortName: '大学',
+    eyebrow: 'COLLEGE & LEARNING',
+    description: '从课程学习到项目作品集，把大学四年变成可验证的能力成长。',
+    color: '#6b6f3e',
+    softColor: '#e8e7c7'
+  },
+  {
+    id: 'ai',
+    name: 'AI 行业',
+    shortName: 'AI',
+    eyebrow: 'ARTIFICIAL INTELLIGENCE',
+    description: '理解 AI 产业链、核心概念、项目实践与安全边界。',
+    color: '#315a7d',
+    softColor: '#d4e2eb'
+  },
+  {
+    id: 'books',
+    name: '认知书籍',
+    shortName: '阅读',
+    eyebrow: 'READING & THINKING',
+    description: '以原创导读连接批判思考、学习方法、表达、习惯与决策。',
+    color: '#75614f',
+    softColor: '#e7ddd2'
+  },
+  {
+    id: 'finance',
+    name: '财经知识',
+    shortName: '财经',
+    eyebrow: 'FINANCIAL LITERACY',
+    description: '建立预算、应急资金、风险意识和反诈骗能力。',
+    color: '#8a6e28',
+    softColor: '#ede2bd'
+  },
+  {
+    id: 'teacher',
+    name: '教师行业',
+    shortName: '教师',
+    eyebrow: 'TEACHING PRACTICE',
+    description: '围绕教学目标、课堂管理、差异化教学和评价反馈整理执行方法。',
     color: '#3f6f67',
     softColor: '#d9e6df'
+  },
+  {
+    id: 'cross-border',
+    name: '跨境电商',
+    shortName: '跨境',
+    eyebrow: 'CROSS-BORDER COMMERCE',
+    description: '覆盖市场验证、商品本地化、物流、合规与海外客服。',
+    color: '#5066a0',
+    softColor: '#dce2f2'
+  },
+  {
+    id: 'startup',
+    name: '创业者指南',
+    shortName: '创业',
+    eyebrow: 'ENTREPRENEURSHIP',
+    description: '从问题验证到单位经济和风险控制，建立创业行动框架。',
+    color: '#b94f3f',
+    softColor: '#f1d7ce'
+  },
+  {
+    id: 'short-video',
+    name: '短视频运营',
+    shortName: '短视频',
+    eyebrow: 'SHORT VIDEO',
+    description: '从定位、脚本、拍摄到数据复盘和商业合规。',
+    color: '#7d426f',
+    softColor: '#ead5e5'
   }
 ];
 
