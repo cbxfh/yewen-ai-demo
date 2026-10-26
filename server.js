@@ -5,7 +5,12 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { URL } = require('node:url');
-const { industries, getResources, buildResourceContext } = require('./data/resources');
+const {
+  industries,
+  topicNames,
+  getResources,
+  buildResourceContext
+} = require('./data/resources');
 const { createUserStore, UserStoreError } = require('./lib/user-store');
 
 const ROOT = __dirname;
@@ -26,6 +31,8 @@ const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const AUTH_RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT = 10;
+const VALID_INDUSTRY_IDS = new Set(['all', ...industries.map((industry) => industry.id)]);
+const VALID_TOPIC_IDS = new Set(['all', ...Object.keys(topicNames)]);
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -528,13 +535,14 @@ function buildKnowledgePrompt(knowledge) {
   ].join('\n');
 }
 
-function buildSystemPrompt(industry, knowledge = []) {
+function buildSystemPrompt(industry, knowledge = [], question = '') {
   const industryLabels = {
     all: '餐饮与美容美发',
     food: '餐饮',
-    beauty: '美容美发'
+    beauty: '美容美发',
+    growth: '大学、AI、职业、教师、创业、财经和短视频等成长与通识'
   };
-  const context = buildResourceContext(industry, 12000);
+  const context = buildResourceContext(industry, 12000, question);
   const knowledgePrompt = buildKnowledgePrompt(knowledge);
   return [
     '你是“业问”的专业经营助理。',
@@ -643,9 +651,10 @@ async function callChatProvider({ messages, systemPrompt, maxTokens, timeoutMs =
 }
 
 async function requestChatCompletion({ messages, industry, knowledge = [] }) {
+  const question = messages[messages.length - 1]?.content || '';
   const result = await callChatProvider({
     messages,
-    systemPrompt: buildSystemPrompt(industry, knowledge),
+    systemPrompt: buildSystemPrompt(industry, knowledge, question),
     maxTokens: getAiConfig().maxTokens
   });
   return {
@@ -690,7 +699,7 @@ async function handleChat(req, res) {
       maxDocumentChars: MAX_KNOWLEDGE_DOC_CHARS,
       maxTotalChars: MAX_KNOWLEDGE_CHARS
     });
-    const industry = ['all', 'food', 'beauty'].includes(body.industry) ? body.industry : 'all';
+    const industry = VALID_INDUSTRY_IDS.has(body.industry) ? body.industry : 'all';
     const dailyQuota = consumePublicDailyQuota();
     if (!dailyQuota.allowed) {
       json(res, 429, {
@@ -1163,13 +1172,19 @@ function createApp() {
 
       if (pathname === '/api/resources' && req.method === 'GET') {
         const industry = requestUrl.searchParams.get('industry') || 'all';
-        if (!['all', 'food', 'beauty'].includes(industry)) {
+        const topic = requestUrl.searchParams.get('topic') || 'all';
+        if (!VALID_INDUSTRY_IDS.has(industry)) {
           json(res, 400, { error: '行业参数无效', code: 'INVALID_INDUSTRY' });
+          return;
+        }
+        if (!VALID_TOPIC_IDS.has(topic)) {
+          json(res, 400, { error: '专题参数无效', code: 'INVALID_TOPIC' });
           return;
         }
         json(res, 200, {
           industries,
-          resources: getResources({ industry })
+          topics: Object.entries(topicNames).map(([id, name]) => ({ id, name })),
+          resources: getResources({ industry, topic })
         });
         return;
       }

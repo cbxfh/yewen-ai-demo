@@ -3,9 +3,11 @@
 (() => {
   const state = {
     industries: [],
+    topics: [],
     resources: [],
     resourcesLoaded: false,
     industry: 'all',
+    topic: 'all',
     type: 'all',
     query: '',
     savedOnly: false,
@@ -35,6 +37,7 @@
     resultsSummary: document.getElementById('results-summary'),
     resetFilters: document.getElementById('reset-filters'),
     savedFilter: document.getElementById('saved-filter'),
+    topicFilterRow: document.getElementById('topic-filter-row'),
     savedCount: document.getElementById('saved-count'),
     resourceModal: document.getElementById('resource-modal'),
     resourceDialog: document.querySelector('.resource-dialog'),
@@ -89,6 +92,7 @@
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       state.industries = Array.isArray(payload.industries) ? payload.industries : [];
+      state.topics = Array.isArray(payload.topics) ? payload.topics : [];
       state.resources = Array.isArray(payload.resources) ? payload.resources : [];
       state.resourcesLoaded = true;
 
@@ -99,6 +103,7 @@
       setText('count-all', formatCount(state.resources.length));
       setText('count-food', formatCount(industryCounts.food || 0));
       setText('count-beauty', formatCount(industryCounts.beauty || 0));
+      setText('count-growth', formatCount(industryCounts.growth || 0));
       renderResources();
     } catch {
       state.resourcesLoaded = false;
@@ -199,6 +204,10 @@
     const query = state.query.trim().toLowerCase();
     return state.resources.filter((resource) => {
       const matchesIndustry = state.industry === 'all' || resource.industry === state.industry;
+      const matchesTopic =
+        state.topic === 'all' ||
+        resource.topicId === state.topic ||
+        state.industry !== 'growth';
       const matchesResourceType = matchesType(resource, state.type);
       const matchesSaved = !state.savedOnly || state.savedIds.has(resource.id);
       const haystack = [
@@ -207,12 +216,14 @@
         resource.type,
         resource.audience,
         resource.outcome,
+        resource.topicName,
         ...(resource.tags || [])
       ]
         .join(' ')
         .toLowerCase();
       return (
         matchesIndustry &&
+        matchesTopic &&
         matchesResourceType &&
         matchesSaved &&
         (!query || haystack.includes(query))
@@ -285,7 +296,9 @@
     const footer = document.createElement('div');
     footer.className = 'card-footer';
     const meta = document.createElement('span');
-    meta.textContent = `${resource.readTime} 分钟阅读 · ${getIndustryShortName(resource.industry)}`;
+    meta.textContent = `${resource.readTime} 分钟阅读 · ${getIndustryShortName(resource.industry)}${
+      resource.topicName ? ` · ${resource.topicName}` : ''
+    }`;
     const action = document.createElement('span');
     action.className = 'card-footer-action';
     action.innerHTML =
@@ -297,21 +310,45 @@
   }
 
   function getIndustryShortName(id) {
-    return id === 'beauty' ? '美业' : '餐饮';
+    if (id === 'beauty') return '美业';
+    if (id === 'growth') return '成长';
+    return '餐饮';
   }
 
   function getIndustryName(id) {
     const industry = state.industries.find((item) => item.id === id);
-    return industry ? industry.name : id === 'beauty' ? '美容美发' : '餐饮行业';
+    if (industry) return industry.name;
+    if (id === 'beauty') return '美容美发';
+    if (id === 'growth') return '成长与通识';
+    return '餐饮行业';
   }
 
   function setIndustry(industry) {
-    if (!['all', 'food', 'beauty'].includes(industry)) return;
+    if (industry !== 'all' && !state.industries.some((item) => item.id === industry)) return;
     state.industry = industry;
+    state.topic = 'all';
+    elements.topicFilterRow.hidden = industry !== 'growth';
     document.querySelectorAll('.industry-tab').forEach((button) => {
       const active = button.dataset.industry === industry;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.topic-filter').forEach((button) => {
+      button.classList.toggle('active', button.dataset.topic === 'all');
+    });
+    renderResources();
+  }
+
+  function setTopic(topic) {
+    if (
+      topic !== 'all' &&
+      !state.topics.some((item) => item.id === topic)
+    ) {
+      return;
+    }
+    state.topic = topic;
+    document.querySelectorAll('.topic-filter').forEach((button) => {
+      button.classList.toggle('active', button.dataset.topic === topic);
     });
     renderResources();
   }
@@ -406,6 +443,7 @@
     setText('dialog-callout', resource.callout);
     renderSections(resource.sections || []);
     renderChecklist(resource.checklist || []);
+    renderSources(resource.sources || []);
     syncSaveControls(resource.id);
 
     elements.resourceModal.hidden = false;
@@ -462,6 +500,27 @@
         text.textContent = item;
         wrapper.append(mark, text);
         return wrapper;
+      })
+    );
+  }
+
+  function renderSources(sources) {
+    const section = document.getElementById('dialog-sources-section');
+    const container = document.getElementById('dialog-sources');
+    const validSources = sources.filter(
+      (source) => source && typeof source.label === 'string' && /^https:\/\//.test(source.url || '')
+    );
+    section.hidden = validSources.length === 0;
+    container.replaceChildren(
+      ...validSources.map((source) => {
+        const link = document.createElement('a');
+        link.className = 'dialog-source-link';
+        link.href = source.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.innerHTML =
+          `${escapeHTML(source.label)}<svg class="icon" aria-hidden="true"><use href="#icon-arrow-up-right"></use></svg>`;
+        return link;
       })
     );
   }
@@ -836,6 +895,11 @@
     document.querySelector('.type-filters').addEventListener('click', (event) => {
       const button = event.target.closest('[data-type]');
       if (button) setType(button.dataset.type);
+    });
+
+    document.querySelector('.topic-filters').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-topic]');
+      if (button) setTopic(button.dataset.topic);
     });
 
     elements.librarySearchInput.addEventListener('input', () => {
