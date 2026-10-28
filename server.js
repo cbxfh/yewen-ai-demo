@@ -1275,6 +1275,16 @@ function serveStatic(req, res, pathname) {
   });
 }
 
+function sendRedirect(res, location) {
+  res.writeHead(302, {
+    ...securityHeaders('text/html; charset=utf-8'),
+    Location: location,
+    'Cache-Control': 'no-store',
+    'Content-Length': '0'
+  });
+  res.end();
+}
+
 function sendNotFound(res) {
   json(res, 404, { error: '页面不存在', code: 'NOT_FOUND' });
 }
@@ -1450,6 +1460,15 @@ function createApp() {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.writeHead(405, { ...securityHeaders(), Allow: 'GET, HEAD' });
         res.end();
+        return;
+      }
+
+      if (
+        (pathname === '/assistant' || pathname === '/assistant.html') &&
+        !getAuthenticatedUser(req)
+      ) {
+        const next = `${pathname}${requestUrl.search}`;
+        sendRedirect(res, `/login.html?next=${encodeURIComponent(next)}`);
         return;
       }
 

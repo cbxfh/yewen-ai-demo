@@ -26,7 +26,6 @@
   };
 
   const elements = {
-    authLoading: document.getElementById('auth-loading'),
     currentUsername: document.getElementById('current-username'),
     userAvatar: document.getElementById('user-avatar'),
     logoutUser: document.getElementById('logout-user'),
@@ -108,13 +107,20 @@
     const authenticated = await loadAuthSession();
     if (!authenticated) return;
     state.selectedIds = readSelectedIds(state.user.id);
-    await Promise.allSettled([loadApiStatus(), loadDocuments(), loadChatHistory()]);
     renderKnowledge();
     updateContextSummary();
     renderChatState();
-    elements.authLoading.hidden = true;
 
+    const tasks = [
+      loadApiStatus(),
+      loadDocuments().then(() => {
+        renderKnowledge();
+        updateContextSummary();
+      }),
+      loadChatHistory().then(renderChatState)
+    ];
     if (shouldOpenSettings()) openSettings();
+    await Promise.allSettled(tasks);
   }
 
   function bindEvents() {
@@ -208,8 +214,7 @@
       elements.userAvatar.textContent = payload.user.username.slice(0, 1).toUpperCase();
       return true;
     } catch {
-      elements.authLoading.querySelector('strong').textContent = '账号验证失败';
-      elements.authLoading.querySelector('p').textContent = '请刷新页面；如果问题持续，请检查服务是否运行。';
+      showToast('账号验证失败，请刷新页面或检查网络连接');
       return false;
     }
   }

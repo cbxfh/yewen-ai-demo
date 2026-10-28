@@ -146,10 +146,18 @@ test('index page includes security headers and primary content', async () => {
   assert.match(html, /餐饮/);
   assert.match(html, /美容美发/);
   assert.match(html, /AI/);
+  assert.match(html, /rel="prefetch" href="\/assistant\.html"/);
 });
 
-test('dedicated assistant page exposes API settings and personal knowledge import', async () => {
-  const response = await fetch(`${baseUrl}/assistant`);
+test('assistant page redirects immediately when logged out and exposes the workspace when logged in', async () => {
+  const guestResponse = await fetch(`${baseUrl}/assistant`, { redirect: 'manual' });
+  assert.equal(guestResponse.status, 302);
+  assert.equal(
+    guestResponse.headers.get('location'),
+    '/login.html?next=%2Fassistant'
+  );
+
+  const response = await authenticatedFetch('/assistant');
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /AI 助手与个人知识库/);
@@ -161,6 +169,8 @@ test('dedicated assistant page exposes API settings and personal knowledge impor
   assert.match(html, /id="chat-industry-select"/);
   assert.match(html, /value="teacher"/);
   assert.match(html, /id="feedback-form"/);
+  assert.doesNotMatch(html, /id="auth-loading"/);
+  assert.doesNotMatch(html, /正在验证账号/);
 });
 
 test('login page is public and exposes registration and login forms', async () => {
